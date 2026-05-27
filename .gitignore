@@ -27,8 +27,8 @@ dist-ssr
 
 # TypeScript build outputs
 *.tsbuildinfo
-**/src/**/*.d.ts
-**/src/**/*.d.ts.map
+**/*.d.ts
+**/*.d.ts.map
 **/src/**/*.js
 **/src/**/*.js.map
 
