@@ -1,0 +1,20 @@
+{
+  "name": "@kaeldaw/ui-kit",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b",
+    "lint": "eslint ."
+  },
+  "exports": {
+    "./*": "./src/*"
+  },
+  "dependencies": {
+    "@kaeldaw/shared": "workspace:*",
+    "@kaeldaw/ui-controls": "workspace:*",
+    "@kaeldaw/project": "workspace:*",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
+  }
+}

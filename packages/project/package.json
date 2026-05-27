@@ -1,0 +1,17 @@
+{
+  "name": "@kaeldaw/project",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b",
+    "lint": "eslint ."
+  },
+  "exports": {
+    "./*": "./src/*"
+  },
+  "dependencies": {
+    "@kaeldaw/shared": "workspace:*",
+    "zustand": "^5.0.0"
+  }
+}

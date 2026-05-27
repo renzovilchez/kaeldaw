@@ -1,7 +1,15 @@
 {
   "files": [],
   "references": [
-    { "path": "./tsconfig.app.json" },
-    { "path": "./tsconfig.node.json" }
+    { "path": "./packages/shared" },
+    { "path": "./packages/audio-engine" },
+    { "path": "./packages/sequencer" },
+    { "path": "./packages/mixer" },
+    { "path": "./packages/instruments" },
+    { "path": "./packages/plugin-system" },
+    { "path": "./packages/project" },
+    { "path": "./packages/ui-controls" },
+    { "path": "./packages/ui-kit" },
+    { "path": "./apps/studio" }
   ]
 }

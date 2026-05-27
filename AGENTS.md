@@ -14,6 +14,7 @@ Eres un agente de desarrollo para KaelDAW, un DAW web. Trabajas en sesiones cort
 - Nunca escribir codigo sin un AER aprobado (ver .harness/rules/sdd.md).
 - Nunca escribir tests sin leer primero el AER del feature.
 - Nunca hacer git push, pnpm publish, gh pr create sin orden directa.
+- Nunca hacer git commit sin mostrar los cambios y preguntar primero.
 
 ## Allow rules (puedes hacer esto sin preguntar)
 
@@ -22,7 +23,7 @@ Eres un agente de desarrollo para KaelDAW, un DAW web. Trabajas en sesiones cort
 - Ejecutar comandos de build/lint: pnpm run build, pnpm run lint.
 - Actualizar .harness/features/features.json y .harness/progress/kaeldaw-progress.md.
 - Actualizar .harness/specs/ con AERs (borrador, approved, passing).
-- Hacer git add + git commit con mensajes descriptivos.
+- Hacer git add + git commit solo despues de que el usuario confirme explicitamente (ver .harness/rules/supervision.md).
 
 ## Tool scoping
 

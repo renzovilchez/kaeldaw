@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
+    "types": ["vite/client"]
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../../packages/shared" },
+    { "path": "../../packages/ui-controls" },
+    { "path": "../../packages/project" },
+    { "path": "../../packages/ui-kit" },
+    { "path": "./tsconfig.node.json" }
+  ]
+}
