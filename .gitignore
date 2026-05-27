@@ -27,9 +27,10 @@ dist-ssr
 
 # TypeScript build outputs
 *.tsbuildinfo
-src/**/*.d.ts
-src/**/*.js
-src/**/*.js.map
+**/src/**/*.d.ts
+**/src/**/*.d.ts.map
+**/src/**/*.js
+**/src/**/*.js.map
 
 # Environment variables
 .env
