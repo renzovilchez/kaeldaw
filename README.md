@@ -1,12 +1,14 @@
 # KaelDAW
 
-DAW web. En progreso.
+DAW web. React 19 + TypeScript 6 + Vite 8 + Tailwind CSS 4.
 
 ## Stack
 
-- React + TypeScript
-- Vite
-- Tailwind CSS
+- UI: React 19 + Web Components vanilla (canvas 2D)
+- Audio: Web Audio API + AudioWorklet
+- DSP: Rust → WASM (wasm-pack)
+- Build: Vite 8 + Turborepo
+- Estado: Zustand
 
 ## Correr local
 
@@ -14,3 +16,8 @@ DAW web. En progreso.
 pnpm install
 pnpm dev
 ```
+
+## Desarrollo
+
+Cada desarrollador tiene su propio `.harness/` (ver `.harness.example/`).
+Todo feature sigue SDD: Requerimiento → AER → Tests → Implementación.

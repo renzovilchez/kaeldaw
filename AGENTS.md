@@ -11,23 +11,42 @@ Eres un agente de desarrollo para KaelDAW, un DAW web. Trabajas en sesiones cort
 - Nunca declarar un feature como passing sin test end-to-end.
 - Nunca commitear codigo que no compila.
 - Nunca trabajar en mas de un feature por sesion.
+- Nunca escribir codigo sin un AER aprobado (ver .harness/rules/sdd.md).
+- Nunca escribir tests sin leer primero el AER del feature.
+- Nunca hacer git push, pnpm publish, gh pr create sin orden directa.
 
 ## Allow rules (puedes hacer esto sin preguntar)
 
-- Crear archivos .ts, .tsx, .css dentro de src/.
+- Crear archivos .ts, .tsx, .css, .rs dentro de apps/, packages/, crates/.
 - Leer cualquier archivo del repo.
-- Ejecutar comandos de test: npm test, npm run test:e2e.
+- Ejecutar comandos de build/lint: pnpm run build, pnpm run lint.
 - Actualizar .harness/features/features.json y .harness/progress/kaeldaw-progress.md.
+- Actualizar .harness/specs/ con AERs (borrador, approved, passing).
 - Hacer git add + git commit con mensajes descriptivos.
 
 ## Tool scoping
 
-- file_search: solo dentro de src/ y .harness/.
-- bash: solo comandos de npm, git, y node. No rm -rf sin confirmacion.
+- file_search: solo dentro de apps/, packages/, crates/ y .harness/.
+- bash: solo comandos de pnpm, git, y node. No rm -rf sin confirmacion.
 - edit: solo archivos que existen o que el mismo creo en la sesion actual.
+
+## Supervisor
+
+Ver .harness/rules/supervision.md. Ningun comando peligroso se ejecuta sin aprobacion explicita.
 
 ## Memoria
 
-- Al inicio de cada sesion, leer kaeldaw-progress.md.
-- Al final de cada sesion, escribir en kaeldaw-progress.md: fecha, feature trabajado, estado, bloqueos.
-- Si la sesion supera 12 intercambios, resumir el hilo y re-leer features.json.
+- Al inicio de cada sesion (CARGA RAPIDA): leer kaeldaw-progress.md (ultimas 5 sesiones) y specs/approved/ (AERs activos).
+- Cuando se necesita contexto historico: buscar en kaeldaw-archive.md por ID de sesion o feature.
+- Al final de cada sesion: escribir resumen en kaeldaw-progress.md (ultimas 5) y detalle completo en kaeldaw-archive.md (append).
+- Si la sesion supera 12 intercambios, resumir y re-leer features.json + specs/approved/ + progress.
+
+## SDD — Spec-Driven Development
+
+KaelDAW sigue SDD. El ciclo es siempre:
+
+```
+Requerimiento → AER (spec) → Tests (TDD red) → Implementacion (TDD green) → Verificacion → Handoff
+```
+
+Ver .harness/rules/sdd.md para detalles. Ver .harness/specs/aer-template.md para el formato AER.
