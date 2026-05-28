@@ -18,6 +18,26 @@
     "noFallthroughCasesInSwitch": true,
     "verbatimModuleSyntax": true,
     "allowImportingTsExtensions": true,
-    "moduleDetection": "force"
+    "moduleDetection": "force",
+    "paths": {
+      "@kaeldaw/audio-engine": ["./packages/audio-engine/src"],
+      "@kaeldaw/audio-engine/*": ["./packages/audio-engine/src/*"],
+      "@kaeldaw/instruments": ["./packages/instruments/src"],
+      "@kaeldaw/instruments/*": ["./packages/instruments/src/*"],
+      "@kaeldaw/mixer": ["./packages/mixer/src"],
+      "@kaeldaw/mixer/*": ["./packages/mixer/src/*"],
+      "@kaeldaw/plugin-system": ["./packages/plugin-system/src"],
+      "@kaeldaw/plugin-system/*": ["./packages/plugin-system/src/*"],
+      "@kaeldaw/project": ["./packages/project/src"],
+      "@kaeldaw/project/*": ["./packages/project/src/*"],
+      "@kaeldaw/sequencer": ["./packages/sequencer/src"],
+      "@kaeldaw/sequencer/*": ["./packages/sequencer/src/*"],
+      "@kaeldaw/shared": ["./packages/shared/src"],
+      "@kaeldaw/shared/*": ["./packages/shared/src/*"],
+      "@kaeldaw/ui-controls": ["./packages/ui-controls/src"],
+      "@kaeldaw/ui-controls/*": ["./packages/ui-controls/src/*"],
+      "@kaeldaw/ui-kit": ["./packages/ui-kit/src"],
+      "@kaeldaw/ui-kit/*": ["./packages/ui-kit/src/*"]
+    }
   }
 }
