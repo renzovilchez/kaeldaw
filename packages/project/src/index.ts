@@ -12,3 +12,5 @@ export {
   loadFromFile,
   KaeldawError,
 } from "./kaeldaw";
+export { UndoRedoManager } from "./CommandHistory";
+export type { Command } from "./CommandHistory";
