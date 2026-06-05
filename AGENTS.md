@@ -39,6 +39,19 @@ Eres un agente de desarrollo para KaelDAW, un DAW web. Trabajas en sesiones cort
 
 Ver .harness/rules/supervision.md. Ningun comando peligroso se ejecuta sin aprobacion explicita.
 
+## Requisitos del proyecto
+
+Antes de trabajar en features que requieran Rust (feat-010 en adelante), verificar:
+
+- `rustc --version` (>= 1.80)
+- `wasm-pack --version` (>= 0.13)
+- `wasm32-unknown-unknown` target: `rustup target list --installed`
+- Windows: `link.exe` en PATH (VS Build Tools con VC++ workload)
+- macOS: `xcode-select -p`
+- Linux: `which gcc`
+
+Para features solo TypeScript/JS, solo se necesita Node.js + pnpm.
+
 ## Memoria
 
 - Al inicio de cada sesion (CARGA RAPIDA): leer kaeldaw-progress.md (ultimas 5 sesiones) y specs/approved/ (AERs activos).
