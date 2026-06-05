@@ -16,3 +16,5 @@ export { UndoRedoManager } from "./CommandHistory";
 export type { Command } from "./CommandHistory";
 export { useTransportStore } from "./useTransportStore";
 export type { TransportStore } from "./useTransportStore";
+export { useTracksStore } from "./useTracksStore";
+export type { TracksStore } from "./useTracksStore";
