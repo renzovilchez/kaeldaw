@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@kaeldaw/shared": "workspace:*",
+    "fflate": "^0.8.3",
     "zustand": "^5.0.0"
   },
   "devDependencies": {
