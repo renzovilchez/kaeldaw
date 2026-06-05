@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "build": "tsc -b",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "exports": {
     "./*": "./src/*"
@@ -13,5 +15,8 @@
   "dependencies": {
     "@kaeldaw/shared": "workspace:*",
     "zustand": "^5.0.0"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.8"
   }
 }

@@ -5,16 +5,21 @@
   "type": "module",
   "scripts": {
     "build": "tsc -b",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "exports": {
     "./*": "./src/*"
   },
   "dependencies": {
+    "@kaeldaw/project": "workspace:*",
     "@kaeldaw/shared": "workspace:*",
     "@kaeldaw/ui-controls": "workspace:*",
-    "@kaeldaw/project": "workspace:*",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.8"
   }
 }
