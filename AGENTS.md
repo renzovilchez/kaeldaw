@@ -25,6 +25,16 @@ Eres un agente de desarrollo para KaelDAW, un DAW web. Trabajas en sesiones cort
 - Ejecutar comandos de build/lint: pnpm run build, pnpm run lint.
 - Actualizar .harness/features/features.json y .harness/progress/kaeldaw-progress.md.
 - Actualizar .harness/specs/ con AERs (borrador, approved, passing).
+
+## Reglas de edición de features.json
+
+Al cambiar `status` de un feature en features.json, el `oldString` del edit tool DEBE incluir `"type"` y `"id"` juntos para evitar duplicar `"type"`. Ejemplo correcto:
+
+```
+oldString: '"type": "feat",\n      "id": "feat-NNN",\n      "name": "...",'
+```
+
+No arrancar desde `"id"` únicamente, porque algunos bloques tienen `"type"` ANTES de `"id"`.
 - Hacer git add + git commit solo despues de que el usuario confirme explicitamente (ver .harness/rules/supervision.md).
 - Crear ramas feat-*, fix-*, refactor-*, chore-* desde develop con `git checkout -b`.
 - Hacer checkout entre ramas existentes.
