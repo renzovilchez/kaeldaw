@@ -14,3 +14,5 @@ export {
 } from "./kaeldaw";
 export { UndoRedoManager } from "./CommandHistory";
 export type { Command } from "./CommandHistory";
+export { useTransportStore } from "./useTransportStore";
+export type { TransportStore } from "./useTransportStore";

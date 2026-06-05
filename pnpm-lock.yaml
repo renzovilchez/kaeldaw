@@ -156,6 +156,9 @@ importers:
 
   packages/project:
     dependencies:
+      '@kaeldaw/audio-engine':
+        specifier: workspace:*
+        version: link:../audio-engine
       '@kaeldaw/shared':
         specifier: workspace:*
         version: link:../shared
