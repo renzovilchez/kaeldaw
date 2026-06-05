@@ -1,2 +1,8 @@
 // @kaeldaw/project — stores, history, serialization
-export {}
+export {
+  deserialize,
+  serialize,
+  getVersion,
+  SchemaValidationError,
+} from "./schema";
+export type { ProjectSchema, ProjectTrack } from "./schema";
