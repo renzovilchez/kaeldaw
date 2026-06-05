@@ -5,7 +5,7 @@ interface TimeSignature {
   beatValue: number;
 }
 
-class TransportSingleton {
+export class TransportSingleton {
   private _state: TransportState = "stopped";
   private _bpm = 120;
   private _ppqn = 960;
@@ -53,6 +53,22 @@ class TransportSingleton {
   setTimeSignature(beats: number, beatValue: number): void {
     if (beats < 1 || beatValue < 1) return;
     this._timeSignature = { beats, beatValue };
+  }
+
+  advancePosition(ticks: number): void {
+    if (ticks < 0) return;
+    this._position += ticks;
+  }
+
+  resetPosition(): void {
+    this._position = 0;
+  }
+
+  _reset(): void {
+    this._state = "stopped";
+    this._bpm = 120;
+    this._position = 0;
+    this._timeSignature = { beats: 4, beatValue: 4 };
   }
 }
 
