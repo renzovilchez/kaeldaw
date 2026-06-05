@@ -1,3 +1,6 @@
+mod adsr;
+pub use adsr::AdsrEnvelope;
+
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
