@@ -1,2 +1,2 @@
 // @kaeldaw/ui-controls — Web Components vanilla
-export {}
+export { DawKnob } from "./DawKnob";
