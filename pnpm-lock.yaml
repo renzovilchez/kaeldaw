@@ -228,6 +228,9 @@ importers:
 
   packages/ui-kit:
     dependencies:
+      '@kaeldaw/audio-engine':
+        specifier: workspace:*
+        version: link:../audio-engine
       '@kaeldaw/project':
         specifier: workspace:*
         version: link:../project
@@ -247,6 +250,15 @@ importers:
       '@eslint/js':
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.4.0(jiti@2.7.0))
+      '@types/react':
+        specifier: ^19.2.15
+        version: 19.2.15
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.15)
+      jsdom:
+        specifier: ^29.1.1
+        version: 29.1.1
       typescript-eslint:
         specifier: ^8.59.2
         version: 8.60.0(eslint@10.4.0(jiti@2.7.0))(typescript@6.0.3)

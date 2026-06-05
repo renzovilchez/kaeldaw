@@ -1,4 +1,4 @@
 import { defineConfig } from "vitest/config";
 export default defineConfig({
-  test: { name: "@kaeldaw/ui-kit", passWithNoTests: true },
+  test: { name: "@kaeldaw/ui-kit", passWithNoTests: true, environment: "jsdom" },
 });

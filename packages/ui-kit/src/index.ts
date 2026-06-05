@@ -1,2 +1,2 @@
 // @kaeldaw/ui-kit — React wrappers
-export {}
+export { TransportPanel } from "./TransportPanel";

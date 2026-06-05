@@ -13,6 +13,7 @@
     "./*": "./src/*"
   },
   "dependencies": {
+    "@kaeldaw/audio-engine": "workspace:*",
     "@kaeldaw/project": "workspace:*",
     "@kaeldaw/shared": "workspace:*",
     "@kaeldaw/ui-controls": "workspace:*",
@@ -21,6 +22,9 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "jsdom": "^29.1.1",
     "typescript-eslint": "^8.59.2",
     "vitest": "^4.1.8"
   }

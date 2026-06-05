@@ -7,6 +7,7 @@
   "references": [
     { "path": "../shared" },
     { "path": "../ui-controls" },
-    { "path": "../project" }
+    { "path": "../project" },
+    { "path": "../audio-engine" }
   ]
 }
