@@ -18,3 +18,5 @@ export { useTransportStore } from "./useTransportStore";
 export type { TransportStore } from "./useTransportStore";
 export { useTracksStore } from "./useTracksStore";
 export type { TracksStore } from "./useTracksStore";
+export { useMixerStore } from "./useMixerStore";
+export type { MixerStore, MixerChannel } from "./useMixerStore";
