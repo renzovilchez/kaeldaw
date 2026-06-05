@@ -20,3 +20,5 @@ export { useTracksStore } from "./useTracksStore";
 export type { TracksStore } from "./useTracksStore";
 export { useMixerStore } from "./useMixerStore";
 export type { MixerStore, MixerChannel } from "./useMixerStore";
+export { useProjectStore } from "./useProjectStore";
+export type { ProjectStore } from "./useProjectStore";
