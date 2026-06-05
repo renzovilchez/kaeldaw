@@ -3,3 +3,4 @@ export { AudioContextManager } from "./AudioContextManager";
 export { Transport } from "./Transport";
 export { Clock } from "./Clock";
 export { AudioBridge } from "./AudioBridge";
+export { SineOscillator } from "./SineOscillator";
