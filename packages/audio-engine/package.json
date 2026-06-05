@@ -13,7 +13,8 @@
     "./*": "./src/*"
   },
   "dependencies": {
-    "@kaeldaw/shared": "workspace:*"
+    "@kaeldaw/shared": "workspace:*",
+    "kaeldaw-dsp": "workspace:*"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

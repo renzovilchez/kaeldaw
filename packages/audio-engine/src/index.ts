@@ -4,3 +4,4 @@ export { Transport } from "./Transport";
 export { Clock } from "./Clock";
 export { AudioBridge } from "./AudioBridge";
 export { SineOscillator } from "./SineOscillator";
+export { RustOscillator } from "./RustOscillator";

@@ -83,6 +83,9 @@ importers:
       '@kaeldaw/shared':
         specifier: workspace:*
         version: link:../shared
+      kaeldaw-dsp:
+        specifier: workspace:*
+        version: link:../../crates/dsp/pkg
     devDependencies:
       '@eslint/js':
         specifier: ^10.0.1

@@ -28,13 +28,15 @@ Eres un agente de desarrollo para KaelDAW, un DAW web. Trabajas en sesiones cort
 
 ## Reglas de edición de features.json
 
-Al cambiar `status` de un feature en features.json, el `oldString` del edit tool DEBE incluir `"type"` y `"id"` juntos para evitar duplicar `"type"`. Ejemplo correcto:
+NUNCA editar features.json con el `edit` tool. Usar exclusivamente el script:
 
 ```
-oldString: '"type": "feat",\n      "id": "feat-NNN",\n      "name": "...",'
+node scripts/set-feature-status.mjs <id> <status>
 ```
 
-No arrancar desde `"id"` únicamente, porque algunos bloques tienen `"type"` ANTES de `"id"`.
+Ejemplo: `node scripts/set-feature-status.mjs feat-014 passing`
+
+Esto garantiza que no se duplique el campo `type`.
 - Hacer git add + git commit solo despues de que el usuario confirme explicitamente (ver .harness/rules/supervision.md).
 - Crear ramas feat-*, fix-*, refactor-*, chore-* desde develop con `git checkout -b`.
 - Hacer checkout entre ramas existentes.
