@@ -26,6 +26,16 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        run: curl -sSf https://rustwasm.github.io/wasm-pack/installer/init.sh | sh
+
+      - run: pnpm build:wasm
+
       - run: pnpm build
 
       - run: pnpm lint

@@ -76,6 +76,8 @@ importers:
         specifier: ^8.0.12
         version: 8.0.14(@types/node@24.12.4)(jiti@2.7.0)
 
+  crates/dsp/pkg: {}
+
   packages/audio-engine:
     dependencies:
       '@kaeldaw/shared':

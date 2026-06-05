@@ -5,6 +5,11 @@
       "dependsOn": ["^build"],
       "outputs": ["dist/**"]
     },
+    "build:wasm": {
+      "dependsOn": [],
+      "outputs": ["crates/dsp/pkg/**"],
+      "inputs": ["crates/dsp/**"]
+    },
     "dev": {
       "cache": false,
       "persistent": true

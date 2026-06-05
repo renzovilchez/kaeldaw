@@ -22,6 +22,12 @@ dist-ssr
 # IA
 .harness
 
+# Rust build outputs
+crates/dsp/target
+
+# WASM build outputs
+crates/dsp/pkg
+
 # Turbo
 .turbo
 

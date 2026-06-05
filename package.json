@@ -4,6 +4,7 @@
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
+    "build:wasm": "node scripts/build-wasm.mjs",
     "lint": "turbo lint",
     "test": "turbo test",
     "test:e2e": "turbo test:e2e"
