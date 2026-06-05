@@ -26,7 +26,7 @@ Eres un agente de desarrollo para KaelDAW, un DAW web. Trabajas en sesiones cort
 - Actualizar .harness/features/features.json y .harness/progress/kaeldaw-progress.md.
 - Actualizar .harness/specs/ con AERs (borrador, approved, passing).
 - Hacer git add + git commit solo despues de que el usuario confirme explicitamente (ver .harness/rules/supervision.md).
-- Crear ramas feat-* y fix-* desde develop con `git checkout -b`.
+- Crear ramas feat-*, fix-*, refactor-*, chore-* desde develop con `git checkout -b`.
 - Hacer checkout entre ramas existentes.
 
 ## Tool scoping
