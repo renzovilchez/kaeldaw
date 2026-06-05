@@ -37,6 +37,7 @@ class ClockSingleton {
     this.onTick = null;
     this.onBeat = null;
     this.onBar = null;
+    this._timeProvider = () => performance.now();
   }
 
   private process(): void {
