@@ -92,7 +92,6 @@ describe("TransportPanel", () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     root = render(container);
-    const bpmDisplay = container.querySelector('[data-testid="bpm-display"]');
-    expect(bpmDisplay?.textContent).toContain("120");
+    expect(container.textContent).toContain("120 BPM");
   });
 });

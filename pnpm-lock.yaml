@@ -26,12 +26,18 @@ importers:
 
   apps/studio:
     dependencies:
+      '@kaeldaw/audio-engine':
+        specifier: workspace:*
+        version: link:../../packages/audio-engine
       '@kaeldaw/project':
         specifier: workspace:*
         version: link:../../packages/project
       '@kaeldaw/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@kaeldaw/ui-controls':
+        specifier: workspace:*
+        version: link:../../packages/ui-controls
       '@kaeldaw/ui-kit':
         specifier: workspace:*
         version: link:../../packages/ui-kit

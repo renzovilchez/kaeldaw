@@ -11,8 +11,10 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@kaeldaw/audio-engine": "workspace:*",
     "@kaeldaw/project": "workspace:*",
     "@kaeldaw/shared": "workspace:*",
+    "@kaeldaw/ui-controls": "workspace:*",
     "@kaeldaw/ui-kit": "workspace:*",
     "@tailwindcss/vite": "^4.3.0",
     "react": "^19.2.6",

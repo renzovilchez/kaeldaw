@@ -12,7 +12,7 @@ export interface MixerChannel {
 export interface MixerStore {
   channels: MixerChannel[];
   masterVolume: number;
-  addChannel: (name?: string) => void;
+  addChannel: (name?: string, id?: string) => void;
   removeChannel: (id: string) => void;
   setVolume: (id: string, volume: number) => void;
   setPan: (id: string, pan: number) => void;
@@ -31,10 +31,10 @@ function clamp(v: number, min: number, max: number): number {
 export const useMixerStore = create<MixerStore>((set) => ({
   channels: [],
   masterVolume: 1,
-  addChannel: (name?: string) => {
+  addChannel: (name?: string, id?: string) => {
     chCounter++;
     const ch: MixerChannel = {
-      id: crypto.randomUUID(),
+      id: id ?? crypto.randomUUID(),
       name: name ?? `Channel ${chCounter}`,
       volume: 1,
       pan: 0,

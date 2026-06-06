@@ -7,6 +7,7 @@
   "include": ["src"],
   "references": [
     { "path": "../../packages/shared" },
+    { "path": "../../packages/audio-engine" },
     { "path": "../../packages/ui-controls" },
     { "path": "../../packages/project" },
     { "path": "../../packages/ui-kit" },
