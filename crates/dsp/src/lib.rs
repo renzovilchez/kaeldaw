@@ -1,4 +1,6 @@
 mod adsr;
+mod biquad;
+mod ladder;
 pub use adsr::AdsrEnvelope;
 
 use wasm_bindgen::prelude::*;
