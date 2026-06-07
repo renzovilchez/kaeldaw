@@ -1,2 +1,10 @@
 // @kaeldaw/shared — tipos y constantes compartidos
-export {}
+export {
+  setupCanvas,
+  setAriaSlider,
+  clamp,
+  snapStep,
+  ticksToPx,
+  pxToTicks,
+  createDragHandlers,
+} from "./canvas-utils";
