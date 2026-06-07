@@ -1,6 +1,8 @@
 mod adsr;
 mod biquad;
+mod delay;
 mod ladder;
+mod reverb;
 pub use adsr::AdsrEnvelope;
 
 use wasm_bindgen::prelude::*;
