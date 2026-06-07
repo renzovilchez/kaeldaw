@@ -1,0 +1,25 @@
+import { useEffect, useRef, createElement } from "react";
+
+export function Knob({ value, min, max, size, label, onChange }: {
+  value: number; min: number; max: number; size?: number; label?: string;
+  onChange?: (v: number) => void;
+}) {
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !onChange) return;
+    const handler = (e: Event) => onChange((e as CustomEvent).detail.value);
+    el.addEventListener("input", handler);
+    return () => el.removeEventListener("input", handler);
+  }, [onChange]);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.setAttribute("value", String(value));
+    el.setAttribute("min", String(min));
+    el.setAttribute("max", String(max));
+    if (size) el.setAttribute("size", String(size));
+    if (label) el.setAttribute("label", label);
+  });
+  return createElement("daw-knob", { ref, style: { display: "inline-block" } });
+}
