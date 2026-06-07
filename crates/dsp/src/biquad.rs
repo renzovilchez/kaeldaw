@@ -128,7 +128,7 @@ pub fn biquad_set(sample_rate: f32, filter_type: u32, cutoff: f32, q: f32, gain:
 pub fn biquad_process(handle: u32, input: f32) -> f32 {
     FILTERS.with(|filters| {
         let mut v = filters.borrow_mut();
-        if let Some(Some(f))) = v.get_mut(handle as usize) {
+        if let Some(Some(f)) = v.get_mut(handle as usize) {
             let out = f.b0 * input + f.z1;
             f.z1 = f.b1 * input + f.z2 - f.a1 * out;
             f.z2 = f.b2 * input - f.a2 * out;

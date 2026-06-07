@@ -58,7 +58,7 @@ pub fn ladder_set(cutoff: f32, resonance: f32) -> u32 {
 pub fn ladder_process(handle: u32, input: f32) -> f32 {
     FILTERS.with(|filters| {
         let mut v = filters.borrow_mut();
-        if let Some(Some(f))) = v.get_mut(handle as usize) {
+        if let Some(Some(f)) = v.get_mut(handle as usize) {
             let g = calc_g(f.cutoff, f.sample_rate);
             let g = g.clamp(0.0, 1.0);
             let r = f.resonance * 4.0;
