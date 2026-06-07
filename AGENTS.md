@@ -24,7 +24,8 @@ Eres un agente de desarrollo para KaelDAW, un DAW web. Trabajas en sesiones cort
 - Leer cualquier archivo del repo.
 - Ejecutar comandos de build/lint: pnpm run build, pnpm run lint.
 - Actualizar .harness/features/features.json y .harness/progress/kaeldaw-progress.md.
-- Actualizar .harness/specs/ con AERs (borrador, approved, passing).
+- Actualizar .harness/specs/ con AERs (borrador, approved, passing, archive).
+- Poblar el campo `test` en features.json con la ruta al archivo de test principal al mover un AER a passing/.
 
 ## Reglas de edición de features.json
 

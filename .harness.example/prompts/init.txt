@@ -1,0 +1,3 @@
+Lee AGENTS.md y .harness/context/.
+Crea .harness/progress/session-progress.md con estado inicial.
+No escribas codigo de negocio.

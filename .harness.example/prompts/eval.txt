@@ -1,0 +1,2 @@
+Lee AGENTS.md, .harness/features/features.json, y el detalle del feature activo.
+Corre tests. Si fallan, reporta critico. Si pasan, marca passing y actualiza indice.

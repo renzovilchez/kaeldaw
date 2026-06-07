@@ -1,0 +1,11 @@
+Lee AGENTS.md, luego .harness/rules/sdd.md.
+Lee .harness/progress/session-progress.md, .harness/features/features.json.
+Lee .harness/context/ para arquitectura y prioridades.
+
+Si el requerimiento es grande, descomponer en mini-tareas usando Fase 0 del workflow.
+Si hay mini-tareas en features.json con status pending, empezar por la de mayor prioridad.
+
+Lee .harness/specs/approved/ para la tarea activa.
+Elige el workflow en .harness/workflows/ segun el tipo de tarea.
+Sigue SDD: primero AER, luego tests, luego implementacion.
+Al terminar, actualiza specs, progress, archive y features.json.

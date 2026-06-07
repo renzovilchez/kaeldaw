@@ -1,4 +1,22 @@
 {
-  "active": null,
-  "features": []
+  "phases": {
+    "F0": "Fundacion",
+    "F1": "Primera fase funcional",
+    "F2": "Plataforma",
+    "F3": "Ecosistema"
+  },
+  "features": [
+    {
+      "type": "chore",
+      "id": "chore-001",
+      "name": "Verificar setup del harness",
+      "phase": "F0",
+      "priority": 0,
+      "status": "pending",
+      "package": "root",
+      "aer": null,
+      "test": null,
+      "depends": []
+    }
+  ]
 }
