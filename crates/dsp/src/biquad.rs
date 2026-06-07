@@ -24,7 +24,7 @@ fn calc_coeffs(sample_rate: f32, filter_type: u32, cutoff: f32, q: f32, gain: f3
     let sn = omega.sin();
     let cs = omega.cos();
     let alpha = sn / (2.0 * q);
-    let beta = (a.sqrt() / q).min(10.0);
+    let _beta = (a.sqrt() / q).min(10.0);
 
     match filter_type {
         0 => {
@@ -68,19 +68,27 @@ fn calc_coeffs(sample_rate: f32, filter_type: u32, cutoff: f32, q: f32, gain: f3
             [b0, b1, b2, a1, a2]
         }
         5 => {
-            let b0 = a * ((a + 1.0) - (a - 1.0) * cs + beta * sn) / ((a + 1.0) + (a - 1.0) * cs + beta * sn);
-            let b1 = 2.0 * a * ((a - 1.0) - (a + 1.0) * cs) / ((a + 1.0) + (a - 1.0) * cs + beta * sn);
-            let b2 = a * ((a + 1.0) - (a - 1.0) * cs - beta * sn) / ((a + 1.0) + (a - 1.0) * cs + beta * sn);
-            let a1 = -2.0 * a * ((a - 1.0) + (a + 1.0) * cs) / ((a + 1.0) + (a - 1.0) * cs + beta * sn);
-            let a2 = ((a + 1.0) + (a - 1.0) * cs - beta * sn) / ((a + 1.0) + (a - 1.0) * cs + beta * sn);
+            let ap1 = a + 1.0;
+            let am1 = a - 1.0;
+            let b_shelf = 2.0 * a.sqrt() * alpha;
+            let den = ap1 + am1 * cs + b_shelf;
+            let b0 = a * (ap1 - am1 * cs + b_shelf) / den;
+            let b1 = 2.0 * a * (am1 - ap1 * cs) / den;
+            let b2 = a * (ap1 - am1 * cs - b_shelf) / den;
+            let a1 = -2.0 * (am1 + ap1 * cs) / den;
+            let a2 = (ap1 + am1 * cs - b_shelf) / den;
             [b0, b1, b2, a1, a2]
         }
         6 => {
-            let b0 = a * ((a + 1.0) + (a - 1.0) * cs + beta * sn) / ((a + 1.0) - (a - 1.0) * cs + beta * sn);
-            let b1 = -2.0 * a * ((a - 1.0) + (a + 1.0) * cs) / ((a + 1.0) - (a - 1.0) * cs + beta * sn);
-            let b2 = a * ((a + 1.0) + (a - 1.0) * cs - beta * sn) / ((a + 1.0) - (a - 1.0) * cs + beta * sn);
-            let a1 = 2.0 * a * ((a - 1.0) - (a + 1.0) * cs) / ((a + 1.0) - (a - 1.0) * cs + beta * sn);
-            let a2 = ((a + 1.0) - (a - 1.0) * cs - beta * sn) / ((a + 1.0) - (a - 1.0) * cs + beta * sn);
+            let ap1 = a + 1.0;
+            let am1 = a - 1.0;
+            let b_shelf = 2.0 * a.sqrt() * alpha;
+            let den = ap1 - am1 * cs + b_shelf;
+            let b0 = a * (ap1 + am1 * cs + b_shelf) / den;
+            let b1 = -2.0 * a * (am1 + ap1 * cs) / den;
+            let b2 = a * (ap1 + am1 * cs - b_shelf) / den;
+            let a1 = 2.0 * (am1 - ap1 * cs) / den;
+            let a2 = (ap1 - am1 * cs - b_shelf) / den;
             [b0, b1, b2, a1, a2]
         }
         _ => [1.0, 0.0, 0.0, 0.0, 0.0],
@@ -163,7 +171,10 @@ mod tests {
     #[test]
     fn biquad_lp_dc_passes() {
         let h = biquad_set(SR, 0, 1000.0, 0.707, 0.0);
-        let out = biquad_process(h, 1.0);
+        let mut out = 0.0;
+        for _ in 0..200 {
+            out = biquad_process(h, 1.0);
+        }
         assert!((out - 1.0).abs() < 0.01, "expected ~1.0, got {}", out);
         biquad_free(h);
     }
@@ -171,7 +182,10 @@ mod tests {
     #[test]
     fn biquad_hp_dc_attenuates() {
         let h = biquad_set(SR, 1, 1000.0, 0.707, 0.0);
-        let out = biquad_process(h, 1.0);
+        let mut out = 0.0;
+        for _ in 0..200 {
+            out = biquad_process(h, 1.0);
+        }
         assert!(out.abs() < 0.01, "expected ~0.0, got {}", out);
         biquad_free(h);
     }
@@ -179,7 +193,10 @@ mod tests {
     #[test]
     fn biquad_init_returns_handle() {
         let h = biquad_init(SR);
-        let out = biquad_process(h, 1.0);
+        let mut out = 0.0;
+        for _ in 0..200 {
+            out = biquad_process(h, 1.0);
+        }
         assert!((out - 1.0).abs() < 0.01, "expected ~1.0, got {}", out);
         biquad_free(h);
     }
@@ -209,8 +226,10 @@ mod tests {
     #[test]
     fn biquad_lowshelf_boost_dc() {
         let h = biquad_set(SR, 5, 500.0, 0.707, 6.0);
-        let out = biquad_process(h, 1.0);
-        // low-shelf with +6dB gain at DC should be ~2.0 (6dB = factor 2)
+        let mut out = 0.0;
+        for _ in 0..500 {
+            out = biquad_process(h, 1.0);
+        }
         assert!((out - 2.0).abs() < 0.3, "expected ~2.0, got {}", out);
         biquad_free(h);
     }

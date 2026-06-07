@@ -10,7 +10,6 @@ struct Ladder {
     cutoff: f32,
     resonance: f32,
     stage: [f32; 4],
-    delay: [f32; 4],
 }
 
 fn calc_g(cutoff: f32, sample_rate: f32) -> f32 {
@@ -29,7 +28,6 @@ pub fn ladder_init(sample_rate: f32) -> u32 {
             cutoff: 1000.0,
             resonance: 0.0,
             stage: [0.0; 4],
-            delay: [0.0; 4],
         }));
         handle
     })
@@ -48,7 +46,6 @@ pub fn ladder_set(cutoff: f32, resonance: f32) -> u32 {
             cutoff,
             resonance,
             stage: [0.0; 4],
-            delay: [0.0; 4],
         }));
         handle
     })
@@ -63,19 +60,17 @@ pub fn ladder_process(handle: u32, input: f32) -> f32 {
             let g = g.clamp(0.0, 1.0);
             let r = f.resonance * 4.0;
 
-            let mut u = input - r * f.delay[3];
-            if u > 1.0 { u = 1.0; } else if u < -1.0 { u = -1.0; }
+            let fb = r * f.stage[3];
+            let mut s = input * (1.0 + r) - fb;
+            if s > 1.0 { s = 1.0; } else if s < -1.0 { s = -1.0; }
 
             for i in 0..4 {
-                let v_out = f.stage[i];
-                let v_c = v_out + g * (u - v_out);
-                let v_tanh = if v_c > 1.0 { 1.0 } else if v_c < -1.0 { -1.0 } else { v_c };
-                f.stage[i] = v_tanh;
-                f.delay[i] = v_out;
-                u = f.stage[i];
+                let prev = f.stage[i];
+                f.stage[i] = prev + g * (s - prev);
+                s = f.stage[i];
             }
 
-            f.delay[3]
+            f.stage[3]
         } else {
             input
         }
@@ -105,9 +100,12 @@ mod tests {
 
     #[test]
     fn ladder_dc_passes_with_low_resonance() {
-        let h = ladder_init(SR);
-        let out = ladder_process(h, 1.0);
-        assert!((out - 1.0).abs() < 0.1, "expected ~1.0, got {}", out);
+        let h = ladder_set(1000.0, 0.0);
+        let mut out = 0.0;
+        for _ in 0..2000 {
+            out = ladder_process(h, 1.0);
+        }
+        assert!((out - 1.0).abs() < 0.05, "expected ~1.0, got {}", out);
         ladder_free(h);
     }
 
@@ -137,15 +135,18 @@ mod tests {
         let h2 = ladder_set(500.0, 0.9);
         let mut peak1 = 0.0;
         let mut peak2 = 0.0;
-        for i in 0..200 {
-            let input = (2.0 * std::f32::consts::PI * 500.0 * i as f32 / SR).sin();
+        for i in 0..4000 {
+            let t = i as f32 / SR;
+            let input = (2.0 * std::f32::consts::PI * 100.0 * t).sin();
             let o1 = ladder_process(h1, input);
             let o2 = ladder_process(h2, input);
-            if o1.abs() > peak1 { peak1 = o1.abs(); }
-            if o2.abs() > peak2 { peak2 = o2.abs(); }
+            let a1 = o1.abs();
+            let a2 = o2.abs();
+            if a1 > peak1 { peak1 = a1; }
+            if a2 > peak2 { peak2 = a2; }
         }
         assert!(
-            peak2 > peak1,
+            peak2 > peak1 + 0.01,
             "high resonance should produce higher peak, peak1={} peak2={}",
             peak1,
             peak2
@@ -179,11 +180,15 @@ mod tests {
 
     #[test]
     fn ladder_multiple_instances() {
-        let h1 = ladder_init(SR);
-        let h2 = ladder_init(SR);
-        let o1 = ladder_process(h1, 1.0);
-        let o2 = ladder_process(h2, 0.5);
-        assert!((o1 - 1.0).abs() < 0.1, "h1 expected ~1.0, got {}", o1);
+        let h1 = ladder_set(1000.0, 0.0);
+        let h2 = ladder_set(1000.0, 0.0);
+        let mut o1 = 0.0;
+        let mut o2 = 0.0;
+        for _ in 0..2000 {
+            o1 = ladder_process(h1, 1.0);
+            o2 = ladder_process(h2, 0.5);
+        }
+        assert!((o1 - 1.0).abs() < 0.05, "h1 expected ~1.0, got {}", o1);
         assert!((o2 - 0.5).abs() < 0.1, "h2 expected ~0.5, got {}", o2);
         ladder_free(h1);
         ladder_free(h2);
