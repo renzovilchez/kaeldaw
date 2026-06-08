@@ -1,2 +1,2 @@
 // @kaeldaw/mixer — canales, sends, routing de mezcla
-export {}
+export { MixerChannel } from "./MixerChannel";
