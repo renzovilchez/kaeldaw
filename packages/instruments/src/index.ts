@@ -1,2 +1,3 @@
 // @kaeldaw/instruments — synths y samplers
-export {}
+export { PolySynth } from "./PolySynth";
+export type { SynthVoiceConfig, OscillatorType } from "./PolySynth";
