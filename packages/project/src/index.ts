@@ -22,3 +22,5 @@ export { useMixerStore } from "./useMixerStore";
 export type { MixerStore, MixerChannel } from "./useMixerStore";
 export { useProjectStore } from "./useProjectStore";
 export type { ProjectStore } from "./useProjectStore";
+export { encodeWav, createDownloadLink, revokeDownloadLink, exportWav } from "./wav-export";
+export type { ExportOptions, ExportResult } from "./wav-export";
