@@ -5,3 +5,4 @@ export { Clock } from "./Clock";
 export { AudioBridge } from "./AudioBridge";
 export { SineOscillator } from "./SineOscillator";
 export { RustOscillator } from "./RustOscillator";
+export { AudioMeter } from "./AudioMeter";
