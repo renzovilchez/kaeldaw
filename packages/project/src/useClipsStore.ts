@@ -42,7 +42,7 @@ export const useClipsStore = create<ClipsStore>((set, get) => ({
 
   addClip: (clip, externalId) => {
     const id = externalId ?? get().nextId;
-    set((s) => ({ clips: [...s.clips, { ...clip, id, notes: [] }], nextId: Math.max(get().nextId, id + 1) }));
+    set((s) => ({ clips: [...s.clips, { ...clip, id, notes: clip.notes ?? [] }], nextId: Math.max(get().nextId, id + 1) }));
     return id;
   },
 
