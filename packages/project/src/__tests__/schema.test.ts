@@ -14,6 +14,10 @@ const validProject: ProjectSchema = {
   timeSignature: "4/4",
   ppqn: 960,
   tracks: [],
+  mixerChannels: [],
+  masterVolume: 1,
+  clips: [],
+  midiNotes: {},
 };
 
 describe("ProjectSchema", () => {
@@ -85,5 +89,74 @@ describe("ProjectSchema", () => {
   it("deserialize con JSON no valido lanza SchemaValidationError", () => {
     const input = JSON.stringify({ ...validProject, bpm: "not-a-number" });
     expect(() => deserialize(input)).toThrow(SchemaValidationError);
+  });
+
+  // ── Backward compatibility: clips y midiNotes opcionales ──
+
+  it("FEAT-053-05: deserialize sin campo clips retorna clips=[]", () => {
+    const withoutClips = { version: validProject.version, name: validProject.name, bpm: validProject.bpm, timeSignature: validProject.timeSignature, ppqn: validProject.ppqn, tracks: validProject.tracks };
+    const input = JSON.stringify(withoutClips);
+    const result = deserialize(input);
+    expect(result.clips).toEqual([]);
+  });
+
+  it("FEAT-053-06: deserialize sin campo midiNotes retorna midiNotes={}", () => {
+    const withoutMidi = { version: validProject.version, name: validProject.name, bpm: validProject.bpm, timeSignature: validProject.timeSignature, ppqn: validProject.ppqn, tracks: validProject.tracks };
+    const input = JSON.stringify(withoutMidi);
+    const result = deserialize(input);
+    expect(result.midiNotes).toEqual({});
+  });
+
+  it("FEAT-053-07: deserialize con clips como string invalido retorna clips=[]", () => {
+    const input = JSON.stringify({ ...validProject, clips: "not-an-array" });
+    const result = deserialize(input);
+    expect(result.clips).toEqual([]);
+  });
+
+  it("FEAT-053-08: deserialize con midiNotes como array invalido retorna midiNotes={}", () => {
+    const input = JSON.stringify({ ...validProject, midiNotes: [1, 2, 3] });
+    const result = deserialize(input);
+    expect(result.midiNotes).toEqual({});
+  });
+
+  // ── Clips en serialize ──
+
+  it("FEAT-053-15: serialize con clips produce JSON con array de clips", () => {
+    const withClips: ProjectSchema = {
+      ...validProject,
+      clips: [
+        { id: 1, trackIndex: 0, trackId: "t1", startTick: 0, durationTicks: 96, color: "#22d3ee", name: "Clip 1", notes: [] },
+      ],
+    };
+    const json = JSON.parse(serialize(withClips));
+    expect(json.clips).toHaveLength(1);
+    expect(json.clips[0].name).toBe("Clip 1");
+  });
+
+  it("FEAT-053-16: serialize con midiNotes produce JSON con Record de notas", () => {
+    const withMidi: ProjectSchema = {
+      ...validProject,
+      midiNotes: {
+        1: [{ id: 1, note: 60, startTick: 0, durationTicks: 24, velocity: 100 }],
+      },
+    };
+    const json = JSON.parse(serialize(withMidi));
+    expect(json.midiNotes["1"]).toHaveLength(1);
+    expect(json.midiNotes["1"][0].note).toBe(60);
+  });
+
+  // ── Roundtrip con clips ──
+
+  it("roundtrip con clips y midiNotes preserva datos", () => {
+    const full: ProjectSchema = {
+      ...validProject,
+      clips: [
+        { id: 1, trackIndex: 0, trackId: "t1", startTick: 0, durationTicks: 96, color: "#22d3ee", name: "Clip 1",
+          notes: [{ id: 1, note: 60, startTick: 0, durationTicks: 24, velocity: 100 }] },
+      ],
+      midiNotes: { 1: [{ id: 1, note: 60, startTick: 0, durationTicks: 24, velocity: 100 }] },
+    };
+    const result = deserialize(serialize(full));
+    expect(result).toEqual(full);
   });
 });
