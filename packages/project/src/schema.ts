@@ -12,6 +12,35 @@ export interface ProjectTrack {
   name: string;
 }
 
+export interface ProjectMixerChannel {
+  id: string;
+  name: string;
+  volume: number;
+  pan: number;
+  mute: boolean;
+  solo: boolean;
+}
+
+export interface ProjectClip {
+  id: number;
+  trackIndex: number;
+  trackId: string;
+  startTick: number;
+  durationTicks: number;
+  color: string;
+  name: string;
+  notes: { id: number; note: number; startTick: number; durationTicks: number; velocity: number; color?: string }[];
+}
+
+export interface ProjectMidiNote {
+  id: number;
+  note: number;
+  startTick: number;
+  durationTicks: number;
+  velocity: number;
+  color?: string;
+}
+
 export interface ProjectSchema {
   version: string;
   name: string;
@@ -19,6 +48,10 @@ export interface ProjectSchema {
   timeSignature: string;
   ppqn: number;
   tracks: ProjectTrack[];
+  mixerChannels: ProjectMixerChannel[];
+  masterVolume: number;
+  clips: ProjectClip[];
+  midiNotes: Record<number, ProjectMidiNote[]>;
 }
 
 function isSemver(s: string): boolean {
@@ -91,6 +124,12 @@ export function deserialize(json: string): ProjectSchema {
     timeSignature,
     ppqn,
     tracks: parsed.tracks,
+    mixerChannels: Array.isArray(parsed.mixerChannels) ? parsed.mixerChannels : [],
+    masterVolume: typeof parsed.masterVolume === "number" ? parsed.masterVolume : 1,
+    clips: Array.isArray(parsed.clips) ? parsed.clips : [],
+    midiNotes: parsed.midiNotes && typeof parsed.midiNotes === "object" && !Array.isArray(parsed.midiNotes)
+      ? parsed.midiNotes as Record<number, ProjectMidiNote[]>
+      : {},
   };
 }
 

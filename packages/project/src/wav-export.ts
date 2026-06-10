@@ -77,23 +77,33 @@ export async function exportWav(options?: ExportOptions): Promise<ExportResult> 
   const sr = options?.sampleRate || 44100;
   const bitDepth = options?.bitDepth || 16;
   const bitDepth16 = bitDepth as 16 | 24 | 32;
+  const duration = 10;
 
-  const dummyLength = Math.floor(sr * 60);
-  const dummySamples = new Float32Array(dummyLength);
+  const numSamples = Math.floor(sr * duration);
+  const samples = new Float32Array(numSamples);
 
-  const masterBlob = new Blob([encodeWav(dummySamples, sr, bitDepth16)], { type: "audio/wav" });
+  // Generate a 440Hz sine tone with slight fading at start/end
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / sr;
+    let envelope = 1;
+    if (i < sr * 0.05) envelope = i / (sr * 0.05);
+    if (i > numSamples - sr * 0.05) envelope = (numSamples - i) / (sr * 0.05);
+    samples[i] = Math.sin(2 * Math.PI * 440 * t) * 0.3 * envelope;
+  }
+
+  const masterBlob = new Blob([encodeWav(samples, sr, bitDepth16)], { type: "audio/wav" });
   const trackBlobs = new Map<string, Blob>();
 
   if (options?.tracks) {
     for (const trackId of options.tracks) {
-      trackBlobs.set(trackId, new Blob([encodeWav(dummySamples, sr, bitDepth16)], { type: "audio/wav" }));
+      trackBlobs.set(trackId, new Blob([encodeWav(samples, sr, bitDepth16)], { type: "audio/wav" }));
     }
   }
 
   return {
     master: masterBlob,
     tracks: trackBlobs,
-    duration: 60,
+    duration,
     sampleRate: sr,
   };
 }

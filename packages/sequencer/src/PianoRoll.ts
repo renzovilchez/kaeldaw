@@ -1,13 +1,13 @@
 import { setupCanvas, createDragHandlers, ticksToPx, pxToTicks, clamp } from "@kaeldaw/shared/canvas-utils";
 
 const NOTE_HEIGHT = 12;
-const KEY_WIDTH = 40;
+const KEY_WIDTH = 56;
 const HEADER_HEIGHT = 24;
 const MIN_PIXELS_PER_BEAT = 10;
 const MAX_PIXELS_PER_BEAT = 200;
 const DEFAULT_PPB = 40;
-const MIDI_NOTE_MIN = 0;
 const MIDI_NOTE_MAX = 127;
+const MIDI_NOTE_ABSOLUTE_MIN = 12; // C0 — hard floor
 const DEFAULT_VELOCITY = 100;
 
 const BLACK_KEYS = new Set([1, 3, 6, 8, 10]);
@@ -32,7 +32,7 @@ export class PianoRoll extends HTMLElement {
   private _pixelsPerBeat = DEFAULT_PPB;
   private _scrollX = 0;
   private _scrollY = 0;
-  private _noteStart = 84;
+  private _noteStart = 96;
   private _noteEnd = 48;
   private _totalDurationTicks = 3840;
   private _selectedNoteId: number | null = null;
@@ -49,6 +49,7 @@ export class PianoRoll extends HTMLElement {
   } | null = null;
 
   private _rafId: number | null = null;
+  private _resizeObserver: ResizeObserver | null = null;
   private _drag: ReturnType<typeof createDragHandlers> | null = null;
   private _onWheel: (e: WheelEvent) => void;
   private _onKeyDown: (e: KeyboardEvent) => void;
@@ -67,11 +68,14 @@ export class PianoRoll extends HTMLElement {
     this.addEventListener("wheel", this._onWheel, { passive: false });
     this.addEventListener("keydown", this._onKeyDown);
     this.tabIndex = 0;
+    this._resizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => this.update()) : null;
+    this._resizeObserver?.observe(this);
     this._setupDrag();
     this._startRaf();
   }
 
   disconnectedCallback() {
+    this._resizeObserver?.disconnect();
     this._drag?.detach(this);
     this.removeEventListener("wheel", this._onWheel);
     this.removeEventListener("keydown", this._onKeyDown);
@@ -129,7 +133,8 @@ export class PianoRoll extends HTMLElement {
 
   get scrollY(): number { return this._scrollY; }
   set scrollY(v: number) {
-    this._scrollY = clamp(v, 0, (this._noteStart - this._noteEnd) * 12 - 200);
+    const maxScroll = this._maxScrollY();
+    this._scrollY = v < 0 ? 0 : v > maxScroll ? maxScroll : v;
   }
 
   get noteStart(): number { return this._noteStart; }
@@ -139,7 +144,7 @@ export class PianoRoll extends HTMLElement {
 
   get noteEnd(): number { return this._noteEnd; }
   set noteEnd(v: number) {
-    this._noteEnd = clamp(v, MIDI_NOTE_MIN, this._noteStart - 1);
+    this._noteEnd = clamp(Math.floor(v / 12) * 12, MIDI_NOTE_ABSOLUTE_MIN, this._noteStart - 1);
   }
 
   get totalDurationTicks(): number { return this._totalDurationTicks; }
@@ -169,8 +174,9 @@ export class PianoRoll extends HTMLElement {
     this.scrollY = (mid - note) * 12;
   }
 
-  addNote(note: number, startTick: number, durationTicks: number, velocity = DEFAULT_VELOCITY, color?: string): number {
-    const id = this._nextNoteId++;
+  addNote(note: number, startTick: number, durationTicks: number, velocity = DEFAULT_VELOCITY, color?: string, externalId?: number): number {
+    const id = externalId ?? this._nextNoteId++;
+    if (externalId !== undefined) this._nextNoteId = Math.max(this._nextNoteId, externalId + 1);
     this._notes.push({ id, note, startTick, durationTicks, velocity: clamp(velocity, 0, 127), color: color || "#22d3ee" });
     return id;
   }
@@ -315,6 +321,13 @@ export class PianoRoll extends HTMLElement {
     return HEADER_HEIGHT + (this._noteStart - note) * NOTE_HEIGHT - this._scrollY;
   }
 
+  private _maxScrollY(): number {
+    const totalNotes = this._noteStart - this._noteEnd;
+    const notesPx = totalNotes * NOTE_HEIGHT;
+    const visiblePx = (this._canvas?.height || 300) - HEADER_HEIGHT;
+    return Math.max(0, notesPx - visiblePx);
+  }
+
   private _noteFromY(clientY: number): number {
     const rect = this._canvas!.getBoundingClientRect();
     const canvasY = clientY - rect.top + this._scrollY - HEADER_HEIGHT;
@@ -435,7 +448,7 @@ export class PianoRoll extends HTMLElement {
       if (e.deltaY < 0) this.zoomIn();
       else this.zoomOut();
     } else {
-      this._scrollY = clamp(this._scrollY + e.deltaY, 0, (this._noteStart - this._noteEnd) * 12 - 100);
+      this._scrollY = clamp(this._scrollY + e.deltaY, 0, this._maxScrollY());
     }
   }
 

@@ -42,6 +42,10 @@ describe("useProjectStore", () => {
       timeSignature: "7/8",
       ppqn: 1920,
       tracks: [],
+      mixerChannels: [],
+      masterVolume: 1,
+      clips: [],
+      midiNotes: {},
     };
     useProjectStore.getState().loadFromSchema(schema);
     const s = useProjectStore.getState();

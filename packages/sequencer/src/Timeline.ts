@@ -1,6 +1,6 @@
 import { setupCanvas, ticksToPx, pxToTicks } from "@kaeldaw/shared/canvas-utils";
 
-const TRACK_HEIGHT = 48;
+const TRACK_HEIGHT = 64;
 const HEADER_HEIGHT = 24;
 const MIN_PIXELS_PER_BEAT = 10;
 const MAX_PIXELS_PER_BEAT = 200;
@@ -40,11 +40,13 @@ export class Timeline extends HTMLElement {
 
   private _selectedClipId: number | null = null;
   private _rafId: number | null = null;
+  private _resizeObserver: ResizeObserver | null = null;
   private _onMouseDown: (e: MouseEvent) => void;
   private _onMouseMove: (e: MouseEvent) => void;
   private _onMouseUp: (e: MouseEvent) => void;
   private _onWheel: (e: WheelEvent) => void;
   private _onKeyDown: (e: KeyboardEvent) => void;
+  private _onDblClick: (e: MouseEvent) => void;
 
   constructor() {
     super();
@@ -53,6 +55,7 @@ export class Timeline extends HTMLElement {
     this._onMouseUp = this._handleMouseUp.bind(this);
     this._onWheel = this._handleWheel.bind(this);
     this._onKeyDown = this._handleKeyDown.bind(this);
+    this._onDblClick = this._handleDblClick.bind(this);
   }
 
   connectedCallback() {
@@ -60,16 +63,21 @@ export class Timeline extends HTMLElement {
     this.addEventListener("mousedown", this._onMouseDown);
     this.addEventListener("wheel", this._onWheel, { passive: false });
     this.addEventListener("keydown", this._onKeyDown);
+    this.addEventListener("dblclick", this._onDblClick);
     document.addEventListener("mousemove", this._onMouseMove);
     document.addEventListener("mouseup", this._onMouseUp);
     this.tabIndex = 0;
+    this._resizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => this.update()) : null;
+    this._resizeObserver?.observe(this);
     this._startRaf();
   }
 
   disconnectedCallback() {
+    this._resizeObserver?.disconnect();
     this.removeEventListener("mousedown", this._onMouseDown);
     this.removeEventListener("wheel", this._onWheel);
     this.removeEventListener("keydown", this._onKeyDown);
+    this.removeEventListener("dblclick", this._onDblClick);
     document.removeEventListener("mousemove", this._onMouseMove);
     document.removeEventListener("mouseup", this._onMouseUp);
     this._stopRaf();
@@ -144,7 +152,7 @@ export class Timeline extends HTMLElement {
   }
 
   set numTracks(n: number) {
-    this._numTracks = Math.max(1, n);
+    this._numTracks = n;
   }
 
   get totalDurationTicks(): number {
@@ -220,47 +228,68 @@ export class Timeline extends HTMLElement {
     const totalPixels = ticksToPx(this._totalDurationTicks, this.pixelsPerTick);
     const visibleStart = this._scrollX;
     const visibleEnd = this._scrollX + w;
+    const yOffset = this._scrollY % TRACK_HEIGHT;
+    const gridTop = HEADER_HEIGHT - yOffset;
+    const gridH = h - HEADER_HEIGHT + TRACK_HEIGHT;
 
-    // --- Header ruler ---
-    ctx.fillStyle = "#16213e";
-    ctx.fillRect(0, 0, w, HEADER_HEIGHT);
-
-    ctx.fillStyle = "#e5e7eb";
-    ctx.font = "10px sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-
+    // --- Grid lines first (pueden extenderse dentro del header) ---
     const firstBar = Math.max(0, Math.floor(visibleStart / (ppb * 4)));
     const lastBar = Math.ceil(visibleEnd / (ppb * 4));
-
     for (let bar = firstBar; bar <= lastBar; bar++) {
       const x = bar * ppb * 4 - this._scrollX;
       if (x < -ppb || x > w + ppb) continue;
-      ctx.fillStyle = "#e5e7eb";
-      ctx.fillText(`${bar + 1}`, x, HEADER_HEIGHT / 2);
       ctx.fillStyle = "#2a2a4e";
-      ctx.fillRect(x, HEADER_HEIGHT, 1, h - HEADER_HEIGHT);
+      ctx.fillRect(x, gridTop, 1, gridH);
     }
 
-    // --- Beat grid lines ---
     ctx.fillStyle = "#1f1f3a";
     const firstBeat = Math.max(0, Math.floor(visibleStart / ppb));
     const lastBeat = Math.ceil(visibleEnd / ppb);
     for (let beat = firstBeat; beat <= lastBeat; beat++) {
       const x = beat * ppb - this._scrollX;
       if (beat % 4 !== 0) {
-        ctx.fillRect(x, HEADER_HEIGHT, 1, h - HEADER_HEIGHT);
+        ctx.fillRect(x, gridTop, 1, gridH);
       }
     }
 
-    // --- Track backgrounds ---
-    for (let t = 0; t < this._numTracks; t++) {
-      const y = HEADER_HEIGHT + t * TRACK_HEIGHT - this._scrollY;
-      if (y + TRACK_HEIGHT < HEADER_HEIGHT || y > h) continue;
-      if (t % 2 === 0) {
-        ctx.fillStyle = "#1e1e38";
+    // --- Track backgrounds (zebra llena canvas, filas reales más brillantes) ---
+    if (this._numTracks > 0) {
+      const totalVisibleRows = Math.ceil((h - HEADER_HEIGHT + this._scrollY) / TRACK_HEIGHT);
+      for (let t = 0; t < totalVisibleRows; t++) {
+        const y = HEADER_HEIGHT + t * TRACK_HEIGHT - this._scrollY;
+        if (y + TRACK_HEIGHT < HEADER_HEIGHT || y > h) continue;
+        if (t < this._numTracks) {
+          ctx.fillStyle = t % 2 === 0 ? "#1e1e38" : "#1a1a2e";
+        } else {
+          ctx.fillStyle = "#181830";
+        }
         ctx.fillRect(0, y, w, TRACK_HEIGHT);
       }
+    }
+
+    // --- Header ruler (se pinta ENCIMA de las grid lines para cubrirlas) ---
+    ctx.fillStyle = "#16213e";
+    ctx.fillRect(0, 0, w, HEADER_HEIGHT);
+    ctx.fillStyle = "#e5e7eb";
+    ctx.font = "10px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (let bar = firstBar; bar <= lastBar; bar++) {
+      const x = bar * ppb * 4 - this._scrollX;
+      if (x < -ppb || x > w + ppb) continue;
+      ctx.fillText(`${bar + 1}`, x, HEADER_HEIGHT / 2);
+    }
+
+    // --- Empty state hint ---
+    if (this._numTracks === 0) {
+      ctx.fillStyle = "#777";
+      ctx.font = "bold 18px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("Agregá un track para empezar", w / 2, h / 2 - 4);
+      ctx.font = "13px sans-serif";
+      ctx.fillStyle = "#666";
+      ctx.fillText("Click +Add track en el panel Tracks", w / 2, h / 2 + 24);
     }
 
     // --- Playhead ---
@@ -303,7 +332,7 @@ export class Timeline extends HTMLElement {
       ctx.roundRect(cX, cY, cW, cH, 4);
       ctx.stroke();
 
-      ctx.fillStyle = "#e5e7eb";
+    ctx.fillStyle = "#ccc";
       ctx.font = "11px sans-serif";
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
@@ -316,7 +345,6 @@ export class Timeline extends HTMLElement {
       }
     }
 
-    // --- Horizon scroll indicator ---
     ctx.fillStyle = "#0f3460";
     ctx.fillRect(0, h - 4, w * Math.min(1, w / totalPixels), 2);
   }
@@ -367,6 +395,7 @@ export class Timeline extends HTMLElement {
     const clip = this._findClipAt(e.clientX, e.clientY);
     if (clip) {
       this._selectedClipId = clip.id;
+      this.dispatchEvent(new CustomEvent("clip-select", { detail: { clipId: clip.id } }));
       const isResize = this._isOnResizeHandle(e.clientX, clip);
       this._dragState = {
         type: isResize ? "resize" : "move",
@@ -382,7 +411,9 @@ export class Timeline extends HTMLElement {
       this._selectedClipId = null;
       const tick = Math.round(this._tickFromX(e.clientX));
       const track = this._trackFromY(e.clientY);
-      this.dispatchEvent(new CustomEvent("timeline-click", { detail: { tick, trackIndex: track } }));
+      if (track < this._numTracks) {
+        this.dispatchEvent(new CustomEvent("timeline-click", { detail: { tick, trackIndex: track } }));
+      }
     }
   }
 
@@ -454,9 +485,18 @@ export class Timeline extends HTMLElement {
   private _handleKeyDown(e: KeyboardEvent) {
     if (e.key === "Delete" || e.key === "Backspace") {
       if (this._selectedClipId !== null) {
-        this.removeClip(this._selectedClipId);
+        const id = this._selectedClipId;
+        this.removeClip(id);
+        this.dispatchEvent(new CustomEvent("clip-delete", { detail: { clipId: id } }));
         e.preventDefault();
       }
+    }
+  }
+
+  private _handleDblClick(e: MouseEvent) {
+    const clip = this._findClipAt(e.clientX, e.clientY);
+    if (clip) {
+      this.dispatchEvent(new CustomEvent("clip-dblclick", { detail: { clipId: clip.id } }));
     }
   }
 }

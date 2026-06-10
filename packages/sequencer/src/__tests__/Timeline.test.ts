@@ -89,12 +89,12 @@ describe("Timeline", () => {
     expect(tl.pixelsPerBeat).toBeLessThan(before);
   });
 
-  it("numTracks se setea y clamp a minimo 1", () => {
+  it("numTracks se setea sin minimo", () => {
     const tl = createTimeline();
     tl.numTracks = 16;
     expect(tl.numTracks).toBe(16);
     tl.numTracks = 0;
-    expect(tl.numTracks).toBe(1);
+    expect(tl.numTracks).toBe(0);
   });
 
   it("totalDurationTicks se setea y clamp a minimo 1", () => {

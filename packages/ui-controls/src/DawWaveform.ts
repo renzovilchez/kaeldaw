@@ -11,6 +11,7 @@ export class DawWaveform extends HTMLElement {
   private _backgroundColor = "#1a1a2e";
   private _showPlayhead = true;
   private _height = 64;
+  private _resizeObserver: ResizeObserver | null = null;
   private _onClick: (e: MouseEvent) => void;
 
   constructor() {
@@ -23,10 +24,13 @@ export class DawWaveform extends HTMLElement {
     this._canvas = canvas;
     this._ctx = ctx;
     this.update();
+    this._resizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => this.update()) : null;
+    this._resizeObserver?.observe(this);
     this.addEventListener("click", this._onClick);
   }
 
   disconnectedCallback() {
+    this._resizeObserver?.disconnect();
     this.removeEventListener("click", this._onClick);
   }
 
@@ -115,7 +119,7 @@ export class DawWaveform extends HTMLElement {
       ctx.font = "10px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText("No audio", w / 2, h / 2);
+      ctx.fillText("No audio clip selected", w / 2, h / 2);
       return;
     }
 

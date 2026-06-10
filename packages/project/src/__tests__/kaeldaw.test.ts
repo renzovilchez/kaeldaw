@@ -18,6 +18,13 @@ const validProject: ProjectSchema = {
     { id: "t1", name: "Track 1" },
     { id: "t2", name: "Track 2" },
   ],
+  mixerChannels: [
+    { id: "t1", name: "Track 1", volume: 1, pan: 0, mute: false, solo: false },
+    { id: "t2", name: "Track 2", volume: 0.75, pan: -0.5, mute: false, solo: true },
+  ],
+  masterVolume: 1,
+  clips: [],
+  midiNotes: {},
 };
 
 describe(".kaeldaw serialization", () => {
@@ -69,6 +76,14 @@ describe(".kaeldaw serialization", () => {
         { id: "b", name: "Bass" },
         { id: "c", name: "Synth" },
       ],
+      mixerChannels: [
+        { id: "a", name: "Drums", volume: 0.8, pan: 0, mute: false, solo: false },
+        { id: "b", name: "Bass", volume: 1, pan: 0.3, mute: true, solo: false },
+        { id: "c", name: "Synth", volume: 0.5, pan: -0.7, mute: false, solo: false },
+      ],
+      masterVolume: 0.9,
+      clips: [{ id: 1, trackIndex: 0, trackId: "a", startTick: 0, durationTicks: 96, color: "#22d3ee", name: "Clip 1", notes: [] }],
+      midiNotes: {},
     };
     const blob = await saveToBlob(project);
     const result = await loadFromBlob(blob);

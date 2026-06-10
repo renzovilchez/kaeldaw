@@ -82,8 +82,9 @@ describe("MixerChannel", () => {
     const ch = createChannel();
     ch.setAttribute("mute", "");
     expect(ch.mute).toBe(true);
-    const btn = ch.querySelector("button");
-    expect(btn!.style.background).toBe("rgb(220, 38, 38)");
+    const btns = ch.querySelectorAll("button");
+    const muteBtn = btns[2];
+    expect(muteBtn!.style.background).toBe("rgb(220, 38, 38)");
   });
 
   it("solo attr muestra boton con fondo amarillo", () => {
@@ -91,7 +92,7 @@ describe("MixerChannel", () => {
     ch.setAttribute("solo", "");
     expect(ch.solo).toBe(true);
     const btns = ch.querySelectorAll("button");
-    expect(btns[1].style.background).toBe("rgb(202, 138, 4)");
+    expect(btns[3].style.background).toBe("rgb(202, 138, 4)");
   });
 
   it("click mute button emite toggle-mute", () => {
@@ -99,8 +100,8 @@ describe("MixerChannel", () => {
     ch.channelId = "ch-1";
     const handler = vi.fn();
     ch.addEventListener("toggle-mute", handler);
-    const btn = ch.querySelector("button")!;
-    btn.click();
+    const btns = ch.querySelectorAll("button");
+    btns[2].click();
     expect(handler).toHaveBeenCalledTimes(1);
     expect(handler.mock.calls[0][0].detail).toMatchObject({ channelId: "ch-1", mute: true });
   });
@@ -111,7 +112,7 @@ describe("MixerChannel", () => {
     const handler = vi.fn();
     ch.addEventListener("toggle-solo", handler);
     const btns = ch.querySelectorAll("button");
-    btns[1].click();
+    btns[3].click();
     expect(handler).toHaveBeenCalledTimes(1);
     expect(handler.mock.calls[0][0].detail).toMatchObject({ channelId: "ch-1", solo: true });
   });
@@ -129,7 +130,7 @@ describe("MixerChannel", () => {
     ch.meterLevel = 0.5;
     const vuFill = ch.querySelector("div > div") as HTMLDivElement;
     expect(vuFill).not.toBeNull();
-    expect(vuFill.style.width).toBe("50%");
+    expect(vuFill.style.height).toBe("50%");
   });
 
   it("meterLevel niveles altos muestran rojo", () => {

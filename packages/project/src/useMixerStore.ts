@@ -7,11 +7,13 @@ export interface MixerChannel {
   pan: number;
   mute: boolean;
   solo: boolean;
+  meterLevel: number;
 }
 
 export interface MixerStore {
   channels: MixerChannel[];
   masterVolume: number;
+  masterMeterLevel: number;
   addChannel: (name?: string, id?: string) => void;
   removeChannel: (id: string) => void;
   setVolume: (id: string, volume: number) => void;
@@ -20,6 +22,8 @@ export interface MixerStore {
   toggleSolo: (id: string) => void;
   setMasterVolume: (volume: number) => void;
   renameChannel: (id: string, name: string) => void;
+  setMeterLevel: (id: string, level: number) => void;
+  setMasterMeterLevel: (level: number) => void;
 }
 
 let chCounter = 0;
@@ -31,6 +35,7 @@ function clamp(v: number, min: number, max: number): number {
 export const useMixerStore = create<MixerStore>((set) => ({
   channels: [],
   masterVolume: 1,
+  masterMeterLevel: 0,
   addChannel: (name?: string, id?: string) => {
     chCounter++;
     const ch: MixerChannel = {
@@ -40,6 +45,7 @@ export const useMixerStore = create<MixerStore>((set) => ({
       pan: 0,
       mute: false,
       solo: false,
+      meterLevel: 0,
     };
     set((s) => ({ channels: [...s.channels, ch] }));
   },
@@ -75,5 +81,13 @@ export const useMixerStore = create<MixerStore>((set) => ({
     set((s) => ({
       channels: s.channels.map((c) => (c.id === id ? { ...c, name } : c)),
     }));
+  },
+  setMeterLevel: (id, level) => {
+    set((s) => ({
+      channels: s.channels.map((c) => (c.id === id ? { ...c, meterLevel: level } : c)),
+    }));
+  },
+  setMasterMeterLevel: (level) => {
+    set({ masterMeterLevel: level });
   },
 }));

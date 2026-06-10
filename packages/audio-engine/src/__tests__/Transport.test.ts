@@ -75,8 +75,13 @@ describe("Transport", () => {
       expect(Transport.bpm).toBe(120);
     });
 
-    it("setBpm(500) no cambia (max 300)", () => {
+    it("setBpm(500) cambia (max 999)", () => {
       Transport.setBpm(500);
+      expect(Transport.bpm).toBe(500);
+    });
+
+    it("setBpm(1000) no cambia (max 999)", () => {
+      Transport.setBpm(1000);
       expect(Transport.bpm).toBe(120);
     });
   });

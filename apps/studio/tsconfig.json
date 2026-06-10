@@ -11,6 +11,9 @@
     { "path": "../../packages/ui-controls" },
     { "path": "../../packages/project" },
     { "path": "../../packages/ui-kit" },
+    { "path": "../../packages/sequencer" },
+    { "path": "../../packages/mixer" },
+    { "path": "../../packages/instruments" },
     { "path": "./tsconfig.node.json" }
   ]
 }

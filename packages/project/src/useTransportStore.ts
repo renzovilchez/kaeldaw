@@ -1,5 +1,7 @@
 import { create } from "zustand";
 import { Transport } from "@kaeldaw/audio-engine/Transport";
+import { Clock } from "@kaeldaw/audio-engine/Clock";
+import { AudioContextManager } from "@kaeldaw/audio-engine/AudioContextManager";
 
 export interface TransportStore {
   state: string;
@@ -14,6 +16,10 @@ export interface TransportStore {
   setTimeSignature: (beats: number, beatValue: number) => void;
 }
 
+Clock.onTick = () => {
+  useTransportStore.setState({ position: Transport.position });
+};
+
 export const useTransportStore = create<TransportStore>((set) => ({
   state: Transport.state,
   bpm: Transport.bpm,
@@ -21,14 +27,23 @@ export const useTransportStore = create<TransportStore>((set) => ({
   ppqn: Transport.ppqn,
   timeSignature: { ...Transport.timeSignature },
   play: () => {
+    try {
+      AudioContextManager.init();
+      AudioContextManager.resume();
+    } catch {
+      // AudioContext no disponible (entorno sin Web Audio)
+    }
     Transport.play();
-    set({ state: Transport.state });
+    Clock.start();
+    set({ state: Transport.state, position: Transport.position });
   },
   pause: () => {
+    Clock.stop();
     Transport.pause();
-    set({ state: Transport.state });
+    set({ state: Transport.state, position: Transport.position });
   },
   stop: () => {
+    Clock.stop();
     Transport.stop();
     set({ state: Transport.state, position: Transport.position });
   },

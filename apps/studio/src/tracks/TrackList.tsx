@@ -13,13 +13,14 @@ export function TrackList({ tracks, selectedId, channelMap,
   onAddTrack: () => void;
 }) {
   return (
-    <div className="w-56 bg-[#14151f] border-r border-gray-800 flex flex-col shrink-0">
-      <div className="h-7 border-b border-gray-800 flex items-center px-2 text-[9px] text-gray-500 uppercase tracking-wider shrink-0">
-        Tracks
+    <div className="w-56 bg-surface-alt border-r border-border flex flex-col shrink-0 h-full">
+      <div className="h-7 border-b border-border flex items-center justify-between px-3 text-[10px] text-text-muted uppercase tracking-wider shrink-0">
+        <span>Tracks</span>
+        <span className="text-text-dim">{tracks.length}</span>
       </div>
       <div className="flex-1 overflow-y-auto">
         {tracks.length === 0 ? (
-          <div className="p-2 text-[10px] text-gray-600 italic">No tracks</div>
+          <div className="p-3 text-[10px] text-text-muted italic">No tracks</div>
         ) : tracks.map((track) => {
           const ch = channelMap.get(track.id);
           return (
@@ -30,7 +31,7 @@ export function TrackList({ tracks, selectedId, channelMap,
           );
         })}
       </div>
-      <button className="m-1 py-1 px-2 bg-gray-800 hover:bg-gray-700 rounded text-[10px] text-gray-400 text-left shrink-0"
+      <button className="m-1.5 py-1.5 px-3 bg-accent-bg hover:bg-accent rounded text-[10px] text-accent-hover hover:text-white text-left shrink-0 transition-colors"
         onClick={onAddTrack}>
         + Add track
       </button>

@@ -1,5 +1,6 @@
 export class MixerChannel extends HTMLElement {
   private _channelName = "";
+  private _channelNumber = "";
   private _volume = 0.75;
   private _pan = 0;
   private _mute = false;
@@ -7,12 +8,16 @@ export class MixerChannel extends HTMLElement {
   private _meterLevel = 0;
   private _channelId = "";
 
+  private _numEl: HTMLSpanElement | null = null;
   private _nameEl: HTMLSpanElement | null = null;
   private _vuFill: HTMLDivElement | null = null;
+  private _vuPeak: HTMLDivElement | null = null;
   private _fader: HTMLElement | null = null;
   private _muteBtn: HTMLButtonElement | null = null;
   private _soloBtn: HTMLButtonElement | null = null;
   private _panKnob: HTMLElement | null = null;
+  private _volLabel: HTMLDivElement | null = null;
+  private _panLabel: HTMLSpanElement | null = null;
 
   private _onFaderInput: (e: Event) => void;
   private _onPanInput: (e: Event) => void;
@@ -20,7 +25,7 @@ export class MixerChannel extends HTMLElement {
   private _onSoloClick: () => void;
 
   static get observedAttributes() {
-    return ["channel-name", "volume", "pan", "mute", "solo", "meter-level", "channel-id"];
+    return ["channel-name", "channel-number", "volume", "pan", "mute", "solo", "meter-level", "channel-id"];
   }
 
   constructor() {
@@ -46,6 +51,7 @@ export class MixerChannel extends HTMLElement {
     if (oldVal === newVal) return;
     switch (name) {
       case "channel-name": this.channelName = newVal ?? ""; break;
+      case "channel-number": this.channelNumber = newVal ?? ""; break;
       case "volume": this.volume = Number(newVal) || 0; break;
       case "pan": this.pan = Number(newVal) || 0; break;
       case "mute": this.mute = newVal !== null; break;
@@ -55,12 +61,16 @@ export class MixerChannel extends HTMLElement {
     }
   }
 
-  // --- Properties ---
-
   get channelName(): string { return this._channelName; }
   set channelName(v: string) {
     this._channelName = v;
     if (this._nameEl) this._nameEl.textContent = v;
+  }
+
+  get channelNumber(): string { return this._channelNumber; }
+  set channelNumber(v: string) {
+    this._channelNumber = v;
+    if (this._numEl) this._numEl.textContent = v;
   }
 
   get volume(): number { return this._volume; }
@@ -104,30 +114,36 @@ export class MixerChannel extends HTMLElement {
   get channelId(): string { return this._channelId; }
   set channelId(v: string) { this._channelId = v; }
 
-  // --- UI build ---
-
   private _buildUI() {
-    this.style.display = "inline-flex";
-    this.style.flexDirection = "column";
-    this.style.alignItems = "center";
-    this.style.width = "48px";
-    this.style.padding = "4px";
-    this.style.gap = "2px";
-    this.style.background = "#14151f";
-    this.style.borderRadius = "4px";
+    this.style.cssText = "display:inline-flex;flex-direction:column;align-items:center;width:52px;padding:2px 3px;gap:1px;background:#353535;border-radius:4px;border:1px solid #4a4a4a";
+
+    // Number
+    this._numEl = document.createElement("span");
+    this._numEl.style.cssText = "font-size:9px;color:#666;text-align:center;width:100%;line-height:12px;font-weight:600";
+    this._numEl.textContent = this._channelNumber;
+    this.appendChild(this._numEl);
 
     // Name
     this._nameEl = document.createElement("span");
+    this._nameEl.style.cssText = "font-size:7px;color:#aaa;text-align:center;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:10px;margin-bottom:1px";
     this._nameEl.textContent = this._channelName;
-    this._nameEl.style.cssText = "font-size:9px;color:#888;text-align:center;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
     this.appendChild(this._nameEl);
 
-    // VU Meter
+    // Separator
+    const sep = document.createElement("div");
+    sep.style.cssText = "width:80%;height:1px;background:#4a4a4a;margin:1px 0";
+    this.appendChild(sep);
+
+    // VU Meter vertical bar (fills from bottom)
     const vuContainer = document.createElement("div");
-    vuContainer.style.cssText = "width:100%;height:4px;background:#2a2a4e;border-radius:2px;overflow:hidden";
+    vuContainer.style.cssText = "width:100%;height:35px;background:#2a2a2a;border-radius:2px;overflow:hidden;position:relative;border:1px solid #444";
     this._vuFill = document.createElement("div");
-    this._vuFill.style.cssText = "height:100%;width:0%;border-radius:2px;transition:width 50ms";
+    this._vuFill.style.cssText = "position:absolute;bottom:0;left:0;width:100%;height:0%;border-radius:1px;transition:height 40ms";
     vuContainer.appendChild(this._vuFill);
+    // Peak hold dot
+    this._vuPeak = document.createElement("div");
+    this._vuPeak.style.cssText = "position:absolute;bottom:0;left:0;width:100%;height:2px;background:#fff;transition:bottom 100ms";
+    vuContainer.appendChild(this._vuPeak);
     this.appendChild(vuContainer);
     this._updateVU();
 
@@ -135,60 +151,79 @@ export class MixerChannel extends HTMLElement {
     this._fader = document.createElement("daw-fader");
     this._fader.setAttribute("min", "0");
     this._fader.setAttribute("max", "1000");
-    this._fader.setAttribute("width", "6");
-    this._fader.setAttribute("height", "80");
+    this._fader.setAttribute("width", "12");
+    this._fader.setAttribute("height", "72");
     this._fader.setAttribute("value", String(Math.round(this._volume * 1000)));
     this._fader.addEventListener("input", this._onFaderInput);
     this.appendChild(this._fader);
 
-    // Bottom row: M S Pan
-    const row = document.createElement("div");
-    row.style.cssText = "display:flex;align-items:center;gap:1px";
+    // Volume % label
+    this._volLabel = document.createElement("div");
+    this._volLabel.style.cssText = "font-size:7px;color:#888;line-height:10px";
+    this._volLabel.textContent = `${Math.round(this._volume * 100)}%`;
+    this.appendChild(this._volLabel);
 
-    // Mute button
-    this._muteBtn = document.createElement("button");
-    this._muteBtn.textContent = "M";
-    this._muteBtn.style.cssText = "width:18px;height:14px;font-size:7px;font-weight:bold;border:none;border-radius:2px;cursor:pointer";
-    this._updateMuteBtn();
-    this._muteBtn.addEventListener("click", this._onMuteClick);
-    row.appendChild(this._muteBtn);
+    // Pan knob row
+    const panRow = document.createElement("div");
+    panRow.style.cssText = "display:flex;align-items:center;justify-content:center;width:100%";
 
-    // Solo button
-    this._soloBtn = document.createElement("button");
-    this._soloBtn.textContent = "S";
-    this._soloBtn.style.cssText = "width:18px;height:14px;font-size:7px;font-weight:bold;border:none;border-radius:2px;cursor:pointer";
-    this._updateSoloBtn();
-    this._soloBtn.addEventListener("click", this._onSoloClick);
-    row.appendChild(this._soloBtn);
-
-    // Pan knob
     this._panKnob = document.createElement("daw-knob");
     this._panKnob.setAttribute("min", "0");
     this._panKnob.setAttribute("max", "1000");
-    this._panKnob.setAttribute("size", "16");
+    this._panKnob.setAttribute("size", "14");
     this._panKnob.setAttribute("value", String(Math.round((this._pan + 1) / 2 * 1000)));
     this._panKnob.addEventListener("input", this._onPanInput);
-    row.appendChild(this._panKnob);
+    panRow.appendChild(this._panKnob);
 
-    this.appendChild(row);
+    this._panLabel = document.createElement("span");
+    this._panLabel.style.cssText = "font-size:6px;color:#666;margin-left:2px";
+    this._panLabel.textContent = this._panText();
+    panRow.appendChild(this._panLabel);
+
+    this.appendChild(panRow);
+
+    // M S row
+    const msRow = document.createElement("div");
+    msRow.style.cssText = "display:flex;gap:1px;width:100%";
+
+    this._muteBtn = document.createElement("button");
+    this._muteBtn.textContent = "M";
+    this._muteBtn.style.cssText = "flex:1;height:14px;font-size:7px;font-weight:bold;border:none;border-radius:1px;cursor:pointer";
+    this._updateMuteBtn();
+    this._muteBtn.addEventListener("click", this._onMuteClick);
+    msRow.appendChild(this._muteBtn);
+
+    this._soloBtn = document.createElement("button");
+    this._soloBtn.textContent = "S";
+    this._soloBtn.style.cssText = "flex:1;height:14px;font-size:7px;font-weight:bold;border:none;border-radius:1px;cursor:pointer";
+    this._updateSoloBtn();
+    this._soloBtn.addEventListener("click", this._onSoloClick);
+    msRow.appendChild(this._soloBtn);
+
+    this.appendChild(msRow);
+  }
+
+  private _panText(): string {
+    if (this._pan === 0) return "C";
+    return this._pan > 0 ? `R${Math.round(this._pan * 100)}` : `L${Math.round(-this._pan * 100)}`;
   }
 
   private _updateMuteBtn() {
     if (!this._muteBtn) return;
-    this._muteBtn.style.background = this._mute ? "#dc2626" : "#333";
+    this._muteBtn.style.background = this._mute ? "#dc2626" : "#3a3a3a";
     this._muteBtn.style.color = this._mute ? "#fff" : "#888";
   }
 
   private _updateSoloBtn() {
     if (!this._soloBtn) return;
-    this._soloBtn.style.background = this._solo ? "#ca8a04" : "#333";
+    this._soloBtn.style.background = this._solo ? "#ca8a04" : "#3a3a3a";
     this._soloBtn.style.color = this._solo ? "#fff" : "#888";
   }
 
   private _updateVU() {
     if (!this._vuFill) return;
     const pct = Math.round(this._meterLevel * 100);
-    this._vuFill.style.width = `${pct}%`;
+    this._vuFill.style.height = `${pct}%`;
     if (this._meterLevel < 0.7) {
       this._vuFill.style.background = "#22c55e";
     } else if (this._meterLevel < 0.9) {
@@ -196,13 +231,15 @@ export class MixerChannel extends HTMLElement {
     } else {
       this._vuFill.style.background = "#ef4444";
     }
+    if (pct > 0 && this._vuPeak) {
+      this._vuPeak.style.bottom = `${pct}%`;
+    }
   }
-
-  // --- Handlers ---
 
   private _handleFaderInput(e: Event) {
     const value = (e as CustomEvent).detail.value;
     this._volume = Math.max(0, Math.min(1, value / 1000));
+    if (this._volLabel) this._volLabel.textContent = `${Math.round(this._volume * 100)}%`;
     this.dispatchEvent(new CustomEvent("volume-change", {
       detail: { channelId: this._channelId, volume: this._volume },
     }));
@@ -211,6 +248,7 @@ export class MixerChannel extends HTMLElement {
   private _handlePanInput(e: Event) {
     const value = (e as CustomEvent).detail.value;
     this._pan = Math.max(-1, Math.min(1, (value / 1000) * 2 - 1));
+    if (this._panLabel) this._panLabel.textContent = this._panText();
     this.dispatchEvent(new CustomEvent("pan-change", {
       detail: { channelId: this._channelId, pan: this._pan },
     }));

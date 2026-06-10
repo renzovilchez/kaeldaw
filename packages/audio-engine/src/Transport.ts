@@ -46,12 +46,12 @@ export class TransportSingleton {
   }
 
   setBpm(bpm: number): void {
-    if (bpm < 20 || bpm > 300) return;
+    if (bpm < 1 || bpm > 999) return;
     this._bpm = bpm;
   }
 
   setTimeSignature(beats: number, beatValue: number): void {
-    if (beats < 1 || beatValue < 1) return;
+    if (beats < 1 || beats > 32 || beatValue < 1 || beatValue > 64) return;
     this._timeSignature = { beats, beatValue };
   }
 
