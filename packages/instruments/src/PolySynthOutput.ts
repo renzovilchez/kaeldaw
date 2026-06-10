@@ -76,7 +76,7 @@ class PolySynthOutputSingleton {
     this.synth?.destroy();
     this.synth = null;
     if (this._rafId) { cancelAnimationFrame(this._rafId); this._rafId = null; }
-    try { (this.processor as { disconnect?: () => void })?.disconnect(); } catch { /* ok */ }
+    try { const p = this.processor as unknown as { disconnect?: () => void }; p?.disconnect?.(); } catch { /* ok */ }
     try { this.gain?.disconnect(); } catch { /* ok */ }
     try { this.analyser?.disconnect(); } catch { /* ok */ }
     this.processor = null;
