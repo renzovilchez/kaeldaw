@@ -4,6 +4,31 @@ const mockState = vi.hoisted(() => ({ state: "stopped", bpm: 120, position: 0, p
 
 const defaults = { state: "stopped" as const, bpm: 120, position: 0, ppqn: 960, timeSignature: { beats: 4, beatValue: 4 } };
 
+vi.mock("@kaeldaw/audio-engine/AudioContextManager", () => ({
+  AudioContextManager: {
+    init: vi.fn(),
+    resume: vi.fn(() => Promise.resolve()),
+    getCurrentTime: vi.fn(() => 0),
+    getInstance: vi.fn(() => ({ currentTime: 0, sampleRate: 48000 })),
+  },
+}));
+
+vi.mock("@kaeldaw/audio-engine/AudioScheduler", () => ({
+  AudioScheduler: {
+    onPosition: null as ((tick: number) => void) | null,
+    noteOn: null,
+    noteOff: null,
+    running: false,
+    setEvents: vi.fn(),
+    start: vi.fn(),
+    stop: vi.fn(),
+    processBlock: vi.fn(),
+    dispatchForSample: vi.fn(),
+    clearPending: vi.fn(),
+    _reset: vi.fn(),
+  },
+}));
+
 vi.mock("@kaeldaw/audio-engine/Transport", () => ({
   Transport: {
     get state() { return mockState.state; },

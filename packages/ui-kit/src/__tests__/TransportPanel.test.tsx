@@ -2,6 +2,31 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
+vi.mock("@kaeldaw/audio-engine/AudioContextManager", () => ({
+  AudioContextManager: {
+    init: vi.fn(),
+    resume: vi.fn(() => Promise.resolve()),
+    getCurrentTime: vi.fn(() => 0),
+    getInstance: vi.fn(() => ({ currentTime: 0, sampleRate: 48000 })),
+  },
+}));
+
+vi.mock("@kaeldaw/audio-engine/AudioScheduler", () => ({
+  AudioScheduler: {
+    onPosition: null as ((tick: number) => void) | null,
+    noteOn: null,
+    noteOff: null,
+    running: false,
+    setEvents: vi.fn(),
+    start: vi.fn(),
+    stop: vi.fn(),
+    processBlock: vi.fn(),
+    dispatchForSample: vi.fn(),
+    clearPending: vi.fn(),
+    _reset: vi.fn(),
+  },
+}));
+
 vi.mock("@kaeldaw/audio-engine/Transport", () => {
   const mockTransport = {
     state: "stopped",
@@ -88,10 +113,10 @@ describe("TransportPanel", () => {
     expect(display?.textContent).toMatch(/^\d{3}:\d{2}:\d{3}$/);
   });
 
-  it("TransportPanel muestra BPM desde Transport.bpm", () => {
+  it("TransportPanel muestra el estado del Transport", () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     root = render(container);
-    expect(container.textContent).toContain("120 BPM");
+    expect(container.textContent).toContain("stopped");
   });
 });

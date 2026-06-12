@@ -56,6 +56,8 @@ export function TopBar({
   const position = useTransportStore((s) => s.position);
   const ppqn = useTransportStore((s) => s.ppqn);
   const isPlaying = transportState === "playing";
+  const metronomeEnabled = useTransportStore((s) => s.metronomeEnabled);
+  const toggleMetronome = useTransportStore((s) => s.toggleMetronome);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [bpmInput, setBpmInput] = useState(String(bpm));
@@ -123,6 +125,18 @@ export function TopBar({
         title="Stop"
       >
         {"\u23F9"}
+      </button>
+      {/* Metronome */}
+      <button
+        className={`w-7 h-7 flex items-center justify-center rounded text-sm transition-colors ${
+          metronomeEnabled
+            ? "bg-[#3b82f6] text-white"
+            : "bg-[#4a4a4a] hover:bg-[#555] text-[#999]"
+        }`}
+        onClick={toggleMetronome}
+        title={metronomeEnabled ? "Metronome ON" : "Metronome OFF"}
+      >
+        {metronomeEnabled ? "\u266B" : "\u266A"}
       </button>
       <div
         className="bg-[#2a2a2a] px-2 py-1 rounded font-mono text-[#3b82f6] text-[11px] tracking-widest"
