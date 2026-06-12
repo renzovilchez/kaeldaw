@@ -15,6 +15,7 @@ pub struct AdsrEnvelope {
     level: f32,
     state: u8,
     time: f32,
+    release_level: f32,
 }
 
 #[wasm_bindgen]
@@ -29,6 +30,7 @@ impl AdsrEnvelope {
             level: 0.0,
             state: STATE_IDLE,
             time: 0.0,
+            release_level: 0.0,
         }
     }
 
@@ -45,6 +47,7 @@ impl AdsrEnvelope {
 
     pub fn note_off(&mut self) {
         if self.state != STATE_IDLE {
+            self.release_level = self.level;
             self.state = STATE_RELEASE;
             self.time = 0.0;
         }
@@ -91,7 +94,7 @@ impl AdsrEnvelope {
                         self.state = STATE_IDLE;
                     } else {
                         let t = self.time / self.release;
-                        self.level = self.level * (1.0 - t);
+                        self.level = self.release_level * (1.0 - t);
                     }
                 }
             }

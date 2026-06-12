@@ -2,8 +2,10 @@ mod adsr;
 mod biquad;
 mod delay;
 mod ladder;
+mod osc;
 mod reverb;
 pub use adsr::AdsrEnvelope;
+pub use osc::{BandlimitedSaw, BandlimitedSquare};
 
 use wasm_bindgen::prelude::*;
 

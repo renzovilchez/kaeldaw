@@ -37,6 +37,19 @@ class AudioSchedulerSingleton {
     this._startAudioTime = this._getAudioTime();
     this._startTick = startTick;
     this._eventIndex = this._findFirstEvent(startTick);
+
+    if (startTick > 0) {
+      const active = new Map<number, number>();
+      for (const ev of this._events) {
+        if (ev.tick >= startTick) break;
+        if (ev.type === "on") active.set(ev.note, ev.velocity);
+        else active.delete(ev.note);
+      }
+      for (const [note, velocity] of active) {
+        this.noteOn?.(note, velocity);
+      }
+    }
+
     this._running = true;
     this.onPosition?.(startTick);
   }

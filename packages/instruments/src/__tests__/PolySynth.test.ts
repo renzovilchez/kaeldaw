@@ -1,4 +1,60 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+
+const mockDsp = {
+  AdsrEnvelope: class {
+    level = 1;
+    state = 0;
+    time = 0;
+    _r = 0.3;
+    note_on() { this.state = 3; this.level = 1; this.time = 0; }
+    note_off() { if (this.state !== 0) { this.state = 4; this.time = 0; } }
+    process(dt: number) {
+      if (this.state === 4) {
+        this.time += dt;
+        if (this.time >= this._r) { this.state = 0; this.level = 0; }
+        else { this.level = 1 - this.time / this._r; }
+      }
+      return this.level;
+    }
+    is_finished() { return this.state === 0; }
+    free() {}
+  },
+  BandlimitedSaw: class {
+    _ph = 0; _sr = 48000;
+    constructor(sr: number) { this._sr = sr; }
+    process(f: number) {
+      if (f <= 0) return 0;
+      this._ph += f / this._sr;
+      return 2 * (this._ph % 1.0) - 1;
+    }
+    reset() { this._ph = 0; }
+    get_phase() { return this._ph % 1.0; }
+    free() {}
+  },
+  BandlimitedSquare: class {
+    _ph = 0; _sr = 48000;
+    constructor(sr: number) { this._sr = sr; }
+    process(f: number) {
+      if (f <= 0) return 0;
+      this._ph += f / this._sr;
+      return this._ph % 1.0 < 0.5 ? 1 : -1;
+    }
+    reset() { this._ph = 0; }
+    get_phase() { return this._ph % 1.0; }
+    free() {}
+  },
+  biquad_init: () => 0,
+  biquad_set: () => {},
+  biquad_process: (_h: number, i: number) => i,
+  biquad_free: () => {},
+};
+
+vi.mock("kaeldaw-dsp", () => mockDsp);
+
+import { setDspModule } from "../PolySynth";
+
+setDspModule(mockDsp as any);
+
 import { PolySynth } from "../PolySynth";
 
 const SR = 48000;

@@ -1,6 +1,6 @@
 import { AudioContextManager } from "@kaeldaw/audio-engine/AudioContextManager";
 import { AudioScheduler } from "@kaeldaw/audio-engine/AudioScheduler";
-import { PolySynth, type SynthVoiceConfig } from "./PolySynth";
+import { PolySynth, setDspModule, type SynthVoiceConfig } from "./PolySynth";
 import { initWasmEffects, createWasmDelay, setWasmDelay, processWasmDelay, freeWasmDelay, createWasmReverb, setWasmReverb, processWasmReverb, freeWasmReverb } from "@kaeldaw/audio-engine/WasmEffects";
 
 const BLOCK_SIZE = 256;
@@ -18,6 +18,8 @@ class PolySynthOutputSingleton {
   private _delayEnabled = false;
   private _reverbEnabled = false;
   private _metronomeEnabled = false;
+  private _waveformBuf = new Float32Array(2048);
+  private _waveformIdx = 0;
 
   set onLevel(cb: ((level: number) => void) | null) { this._onLevel = cb; }
 
@@ -26,13 +28,28 @@ class PolySynthOutputSingleton {
   get delayEnabled(): boolean { return this._delayEnabled; }
   get reverbEnabled(): boolean { return this._reverbEnabled; }
 
+  getWaveformSamples(): Float32Array | null {
+    if (this._waveformIdx === 0) return null;
+    const out = new Float32Array(this._waveformBuf.length);
+    for (let i = 0; i < this._waveformBuf.length; i++) {
+      out[i] = this._waveformBuf[(this._waveformIdx + i) % this._waveformBuf.length];
+    }
+    return out;
+  }
+
   setDelayEnabled(on: boolean): void { this._delayEnabled = on; }
   setReverbEnabled(on: boolean): void { this._reverbEnabled = on; }
   setMetronomeEnabled(on: boolean): void { this._metronomeEnabled = on; }
 
   async start(config?: Partial<SynthVoiceConfig>): Promise<void> {
-    if (this.synth) return;
+    this.stop();
     await initWasmEffects();
+    await AudioContextManager.resume();
+    const dspMod = await import("kaeldaw-dsp");
+    setDspModule(dspMod);
+    // Pre-generate wavetables in the main thread, not the audio callback
+    new dspMod.BandlimitedSaw(48000).free();
+    new dspMod.BandlimitedSquare(48000).free();
 
     const ctx = AudioContextManager.getInstance();
     const sampleRate = ctx.sampleRate;
@@ -49,7 +66,7 @@ class PolySynthOutputSingleton {
     AudioScheduler.noteOff = (note) => this.synth?.noteOff(note);
 
     this.gain = ctx.createGain();
-    this.gain.gain.value = 0.5;
+    this.gain.gain.value = 0.8;
 
     this.analyser = ctx.createAnalyser();
     this.analyser.fftSize = 256;
@@ -66,7 +83,7 @@ class PolySynthOutputSingleton {
   private _setupAudioCallback(): void {
     (this.processor as unknown as ScriptProcessorNode).onaudioprocess =
       (e: AudioProcessingEvent) => {
-        if (!this.synth || !AudioScheduler.running) return;
+        if (!this.synth) return;
         const output = e.outputBuffer;
         const sr = output.sampleRate;
         const blockStartTime = e.playbackTime;
@@ -87,6 +104,11 @@ class PolySynthOutputSingleton {
 
         if (this._metronomeEnabled) {
           this._renderMetronome(blockStartTime, sr, left, right);
+        }
+
+        for (let i = 0; i < BLOCK_SIZE; i++) {
+          this._waveformBuf[this._waveformIdx] = left[i];
+          this._waveformIdx = (this._waveformIdx + 1) % this._waveformBuf.length;
         }
       };
   }
@@ -128,6 +150,7 @@ class PolySynthOutputSingleton {
     this.analyser = null;
     this._level = 0;
     this._onLevel?.(0);
+    this._waveformIdx = 0;
     if (this._delayHandle >= 0) { freeWasmDelay(this._delayHandle); this._delayHandle = -1; }
     if (this._reverbHandle >= 0) { freeWasmReverb(this._reverbHandle); this._reverbHandle = -1; }
   }
@@ -152,4 +175,9 @@ class PolySynthOutputSingleton {
   }
 }
 
-export const PolySynthOutput = new PolySynthOutputSingleton();
+export const PolySynthOutput = (() => {
+  const key = Symbol.for("kaeldaw.PolySynthOutput");
+  const g = globalThis as any;
+  if (g[key]) g[key].stop();
+  return g[key] ?? (g[key] = new PolySynthOutputSingleton());
+})();

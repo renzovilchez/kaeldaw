@@ -1,5 +1,5 @@
 import { PolySynthOutput } from "@kaeldaw/instruments/PolySynthOutput";
-import type { OscillatorType } from "@kaeldaw/instruments/PolySynth";
+import type { OscillatorType, SynthVoiceConfig } from "@kaeldaw/instruments/PolySynth";
 
 export interface InstrumentPreset {
   id: string;
@@ -44,6 +44,11 @@ class InstrumentManager {
     const synth = PolySynthOutput.synthInstance;
     if (synth) synth.setConfig(preset.config);
     this._notify();
+  }
+
+  getSelectedConfig(): Partial<SynthVoiceConfig> {
+    const preset = DEFAULT_PRESETS.find((p) => p.id === this._selectedId);
+    return preset?.config ?? {};
   }
 
   toggleCategory(category: string) {
