@@ -6,13 +6,14 @@ type TimeProvider = () => number;
 class ClockSingleton {
   private timeoutId: ReturnType<typeof setTimeout> | null = null;
   private schedulerMs = 5;
-  private lastTickTime = 0;
-  private lastFiredTick = 0;
+  private _startTime = 0;
+  private _lastFiredTick = 0;
   private _timeProvider: TimeProvider;
 
   onTick: ((tick: number) => void) | null = null;
   onBeat: ((beat: number) => void) | null = null;
   onBar: ((bar: number) => void) | null = null;
+  onPosition: ((tick: number) => void) | null = null;
 
   constructor() {
     this._timeProvider = this._defaultProvider;
@@ -24,8 +25,10 @@ class ClockSingleton {
 
   start(): void {
     if (this.timeoutId !== null) return;
-    this.lastTickTime = this._timeProvider();
-    this.lastFiredTick = Transport.position;
+    const now = this._timeProvider();
+    const msPerTick = 60000 / Transport.bpm / Transport.ppqn;
+    this._startTime = now - Transport.position * msPerTick;
+    this._lastFiredTick = Transport.position;
     this._schedule();
   }
 
@@ -37,11 +40,12 @@ class ClockSingleton {
 
   _reset(): void {
     this.stop();
-    this.lastTickTime = 0;
-    this.lastFiredTick = 0;
+    this._startTime = 0;
+    this._lastFiredTick = 0;
     this.onTick = null;
     this.onBeat = null;
     this.onBar = null;
+    this.onPosition = null;
     this._timeProvider = this._defaultProvider;
   }
 
@@ -65,21 +69,15 @@ class ClockSingleton {
 
     const now = this._timeProvider();
     const msPerTick = 60000 / Transport.bpm / Transport.ppqn;
+    if (msPerTick <= 0) { this._schedule(); return; }
 
-    if (msPerTick <= 0) return;
+    const currentTick = Math.floor((now - this._startTime) / msPerTick);
 
-    const elapsed = now - this.lastTickTime;
-    const ticksToAdvance = elapsed / msPerTick;
+    if (currentTick > this._lastFiredTick) {
+      Transport.setPosition(currentTick);
+      this.onPosition?.(currentTick);
 
-    if (ticksToAdvance >= 1) {
-      const wholeTicks = Math.floor(ticksToAdvance);
-      Transport.advancePosition(wholeTicks);
-
-      this.lastTickTime += wholeTicks * msPerTick;
-
-      const newPosition = Transport.position;
-
-      for (let t = this.lastFiredTick; t < newPosition; t++) {
+      for (let t = this._lastFiredTick; t < currentTick; t++) {
         this.onTick?.(t);
 
         if (t % Transport.ppqn === 0) {
@@ -92,7 +90,7 @@ class ClockSingleton {
         }
       }
 
-      this.lastFiredTick = newPosition;
+      this._lastFiredTick = currentTick;
     }
 
     this._schedule();

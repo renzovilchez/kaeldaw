@@ -19,6 +19,10 @@ export interface TransportStore {
   toggleMetronome: () => void;
 }
 
+Clock.onPosition = (tick) => {
+  useTransportStore.setState({ position: tick });
+};
+
 AudioScheduler.onPosition = (tick) => {
   useTransportStore.setState({ position: tick });
 };

@@ -303,7 +303,7 @@ function AppInner() {
     let cancelled = false;
 
     if (transportState === "playing") {
-      PolySynthOutput.onLevel = (level) => {
+      PolySynthOutput.onLevel = (level: number) => {
         for (const ch of useMixerStore.getState().channels) {
           setMeterLevel(ch.id, level);
         }
@@ -311,7 +311,12 @@ function AppInner() {
       };
 
       (async () => {
-        await PolySynthOutput.start(instrumentManager.getSelectedConfig());
+        try {
+          await PolySynthOutput.start(instrumentManager.getSelectedConfig());
+        } catch (err) {
+          console.error("PolySynthOutput.start() failed:", err);
+          return;
+        }
         if (cancelled) return;
 
         const clips = useClipsStore.getState().clips;
