@@ -4,7 +4,8 @@ let wasm: typeof import("kaeldaw-dsp") | null = null;
 async function ensureWasm(): Promise<void> {
   if (wasmReady) return;
   const mod = await import("kaeldaw-dsp");
-  await mod.default();
+  const { default: initWasm } = mod;
+  await initWasm();
   wasm = mod;
   wasmReady = true;
 }
