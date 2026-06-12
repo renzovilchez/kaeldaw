@@ -60,6 +60,11 @@ export class TransportSingleton {
     this._position += ticks;
   }
 
+  setPosition(tick: number): void {
+    if (tick < 0) return;
+    this._position = tick;
+  }
+
   resetPosition(): void {
     this._position = 0;
   }

@@ -19,6 +19,11 @@ class AudioContextManagerSingleton {
     return this.ctx;
   }
 
+  getCurrentTime(): number {
+    if (!this.ctx) throw new Error("AudioContext no inicializado");
+    return this.ctx.currentTime;
+  }
+
   async resume(): Promise<void> {
     if (!this.ctx) throw new Error("AudioContext no inicializado");
     await this.ctx.resume();

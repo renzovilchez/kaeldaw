@@ -1,4 +1,5 @@
 import { AudioContextManager } from "@kaeldaw/audio-engine/AudioContextManager";
+import { AudioScheduler } from "@kaeldaw/audio-engine/AudioScheduler";
 import { PolySynth, type SynthVoiceConfig } from "./PolySynth";
 import { initWasmEffects, createWasmDelay, setWasmDelay, processWasmDelay, freeWasmDelay, createWasmReverb, setWasmReverb, processWasmReverb, freeWasmReverb } from "@kaeldaw/audio-engine/WasmEffects";
 
@@ -16,6 +17,7 @@ class PolySynthOutputSingleton {
   private _reverbHandle = -1;
   private _delayEnabled = false;
   private _reverbEnabled = false;
+  private _metronomeEnabled = false;
 
   set onLevel(cb: ((level: number) => void) | null) { this._onLevel = cb; }
 
@@ -26,6 +28,7 @@ class PolySynthOutputSingleton {
 
   setDelayEnabled(on: boolean): void { this._delayEnabled = on; }
   setReverbEnabled(on: boolean): void { this._reverbEnabled = on; }
+  setMetronomeEnabled(on: boolean): void { this._metronomeEnabled = on; }
 
   async start(config?: Partial<SynthVoiceConfig>): Promise<void> {
     if (this.synth) return;
@@ -42,6 +45,9 @@ class PolySynthOutputSingleton {
 
     this.synth = new PolySynth(sampleRate, config);
 
+    AudioScheduler.noteOn = (note, velocity) => this.synth?.noteOn(note, velocity);
+    AudioScheduler.noteOff = (note) => this.synth?.noteOff(note);
+
     this.gain = ctx.createGain();
     this.gain.gain.value = 0.5;
 
@@ -49,26 +55,62 @@ class PolySynthOutputSingleton {
     this.analyser.fftSize = 256;
 
     this.processor = ctx.createScriptProcessor(BLOCK_SIZE, 0, 2) as unknown as AudioNode;
-    (this.processor as unknown as ScriptProcessorNode).onaudioprocess =
-      (e: AudioProcessingEvent) => {
-        if (!this.synth) return;
-        const output = e.outputBuffer;
-        const block = this.synth.processBlock(BLOCK_SIZE);
-        const left = output.getChannelData(0);
-        const right = output.getChannelData(1);
-        for (let i = 0; i < BLOCK_SIZE; i++) {
-          let s = (block[i * 2] + block[i * 2 + 1]) / 2;
-          if (this._delayEnabled) s = processWasmDelay(this._delayHandle, s);
-          if (this._reverbEnabled) s = processWasmReverb(this._reverbHandle, s);
-          left[i] = s;
-          right[i] = s;
-        }
-      };
+    this._setupAudioCallback();
 
     this.processor.connect(this.gain);
     this.gain.connect(this.analyser);
     this.analyser.connect(ctx.destination);
     this._runLoop();
+  }
+
+  private _setupAudioCallback(): void {
+    (this.processor as unknown as ScriptProcessorNode).onaudioprocess =
+      (e: AudioProcessingEvent) => {
+        if (!this.synth || !AudioScheduler.running) return;
+        const output = e.outputBuffer;
+        const sr = output.sampleRate;
+        const blockStartTime = e.playbackTime;
+        const left = output.getChannelData(0);
+        const right = output.getChannelData(1);
+
+        AudioScheduler.processBlock(blockStartTime, BLOCK_SIZE, sr);
+
+        for (let i = 0; i < BLOCK_SIZE; i++) {
+          AudioScheduler.dispatchForSample(i);
+          const [l, r] = this.synth.process();
+          let s = (l + r) / 2;
+          if (this._delayEnabled) s = processWasmDelay(this._delayHandle, s);
+          if (this._reverbEnabled) s = processWasmReverb(this._reverbHandle, s);
+          left[i] = s;
+          right[i] = s;
+        }
+
+        if (this._metronomeEnabled) {
+          this._renderMetronome(blockStartTime, sr, left, right);
+        }
+      };
+  }
+
+  private _renderMetronome(blockStartTime: number, sampleRate: number, left: Float32Array, right: Float32Array): void {
+    const beats = AudioScheduler.getBeatPositions(blockStartTime, BLOCK_SIZE, sampleRate);
+    if (beats.length === 0) return;
+
+    const clickLen = Math.round(0.005 * sampleRate);
+
+    for (const beat of beats) {
+      const freq = beat.isDownbeat ? 2000 : 1200;
+      const amp = beat.isDownbeat ? 0.5 : 0.3;
+      const decay = beat.isDownbeat ? 600 : 800;
+
+      for (let i = 0; i < clickLen && beat.sampleOffset + i < BLOCK_SIZE; i++) {
+        const t = i / sampleRate;
+        const envelope = Math.exp(-t * decay);
+        const sample = Math.sin(2 * Math.PI * freq * t) * amp * envelope;
+        const idx = beat.sampleOffset + i;
+        left[idx] += sample;
+        right[idx] += sample;
+      }
+    }
   }
 
   stop(): void {
@@ -81,6 +123,8 @@ class PolySynthOutputSingleton {
     try { this.analyser?.disconnect(); } catch { /* ok */ }
     this.processor = null;
     this.gain = null;
+    AudioScheduler.noteOn = null;
+    AudioScheduler.noteOff = null;
     this.analyser = null;
     this._level = 0;
     this._onLevel?.(0);

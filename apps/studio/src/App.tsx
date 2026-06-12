@@ -7,7 +7,7 @@ import { useClipsStore } from "@kaeldaw/project/useClipsStore";
 import { useMidiStore } from "@kaeldaw/project/useMidiStore";
 import { useUndoStore } from "@kaeldaw/project/useUndoStore";
 import { PolySynthOutput } from "@kaeldaw/instruments/PolySynthOutput";
-import { AudioContextManager } from "@kaeldaw/audio-engine/AudioContextManager";
+import { AudioScheduler, type MidiEvent } from "@kaeldaw/audio-engine/AudioScheduler";
 import { Transport } from "@kaeldaw/audio-engine/Transport";
 import { saveProjectFile, loadProjectFile } from "@kaeldaw/project/save-load";
 import { exportWav, createDownloadLink, revokeDownloadLink } from "@kaeldaw/project/wav-export";
@@ -17,6 +17,10 @@ import { TrackList } from "./tracks/TrackList";
 import { MixerPanel } from "./mixer/MixerPanel";
 import { FloatingWindow } from "./components/FloatingWindow";
 import { Sidebar } from "./instruments/Sidebar";
+
+const TICKS_PER_BEAT_VISUAL = 24;
+const VISUAL_TO_PPQN = Transport.ppqn / TICKS_PER_BEAT_VISUAL;
+const PPQN_TO_VISUAL = TICKS_PER_BEAT_VISUAL / Transport.ppqn;
 
 function TimelineWindow() {
   const tracks = useTracksStore((s) => s.tracks);
@@ -41,7 +45,7 @@ function TimelineWindow() {
   useEffect(() => {
     const el = elRef.current;
     if (!el) return;
-    (el as any).playheadTick = position;
+    (el as any).playheadTick = position * PPQN_TO_VISUAL;
   }, [position]);
 
   // Sync clips from store → WC when version changes (external load, not user edit)
@@ -147,7 +151,7 @@ function PianoRollWindow() {
   useEffect(() => {
     const el = elRef.current;
     if (!el) return;
-    (el as any).playheadTick = position;
+    (el as any).playheadTick = position * PPQN_TO_VISUAL;
   }, [position]);
 
   // Sync notes when selected clip changes
@@ -265,6 +269,12 @@ function AppInner() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [undo, redo]);
 
+  // Bridge metronome store → PolySynthOutput
+  const metronomeEnabled = useTransportStore((s) => s.metronomeEnabled);
+  useEffect(() => {
+    PolySynthOutput.setMetronomeEnabled(metronomeEnabled);
+  }, [metronomeEnabled]);
+
   // Wire PolySynthOutput to mixer store while playing + MIDI scheduler
   const setMeterLevel = useMixerStore((s) => s.setMeterLevel);
   const setMasterMeterLevel = useMixerStore((s) => s.setMasterMeterLevel);
@@ -272,10 +282,8 @@ function AppInner() {
 
   useEffect(() => {
     let cancelled = false;
-    let rafId: number | null = null;
 
     if (transportState === "playing") {
-      AudioContextManager.init();
       PolySynthOutput.onLevel = (level) => {
         for (const ch of useMixerStore.getState().channels) {
           setMeterLevel(ch.id, level);
@@ -286,52 +294,33 @@ function AppInner() {
       (async () => {
         await PolySynthOutput.start();
         if (cancelled) return;
-        const synth = PolySynthOutput.synthInstance;
-        if (!synth) return;
 
-        // Build sorted events from all clips
         const clips = useClipsStore.getState().clips;
-        type Ev = { tick: number; type: "on" | "off"; note: number; velocity: number };
-        const events: Ev[] = [];
+        const events: MidiEvent[] = [];
         for (const clip of clips) {
           for (const n of clip.notes) {
-            events.push({ tick: clip.startTick + n.startTick, type: "on", note: n.note, velocity: n.velocity });
-            events.push({ tick: clip.startTick + n.startTick + n.durationTicks, type: "off", note: n.note, velocity: 0 });
+            events.push({ tick: (clip.startTick + n.startTick) * VISUAL_TO_PPQN, type: "on", note: n.note, velocity: n.velocity });
+            events.push({ tick: (clip.startTick + n.startTick + n.durationTicks) * VISUAL_TO_PPQN, type: "off", note: n.note, velocity: 0 });
           }
         }
         events.sort((a, b) => a.tick - b.tick);
 
-        let eventIndex = 0;
-        let lastPos = -1;
-
-        const tick = () => {
-          if (cancelled) return;
-          const pos = Transport.position;
-          if (pos === lastPos) { rafId = requestAnimationFrame(tick); return; }
-          lastPos = pos;
-          while (eventIndex < events.length && events[eventIndex].tick <= pos) {
-            const ev = events[eventIndex++];
-            if (ev.type === "on") synth.noteOn(ev.note, ev.velocity);
-            else synth.noteOff(ev.note);
-          }
-          rafId = requestAnimationFrame(tick);
-        };
-        rafId = requestAnimationFrame(tick);
+        AudioScheduler.setEvents(events);
+        AudioScheduler.start(Transport.position);
       })();
 
       return () => {
         cancelled = true;
-        if (rafId !== null) cancelAnimationFrame(rafId);
+        AudioScheduler.stop();
         PolySynthOutput.stop();
-        PolySynthOutput.synthInstance?.allNotesOff();
         for (const ch of useMixerStore.getState().channels) {
           setMeterLevel(ch.id, 0);
         }
         setMasterMeterLevel(0);
       };
     } else {
+      AudioScheduler.stop();
       PolySynthOutput.stop();
-      PolySynthOutput.synthInstance?.allNotesOff();
       for (const ch of useMixerStore.getState().channels) {
         setMeterLevel(ch.id, 0);
       }
@@ -340,7 +329,6 @@ function AppInner() {
 
     return () => {
       cancelled = true;
-      if (rafId !== null) cancelAnimationFrame(rafId);
     };
   }, [transportState, setMeterLevel, setMasterMeterLevel]);
 
