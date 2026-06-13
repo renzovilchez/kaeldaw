@@ -18,7 +18,7 @@ struct Biquad {
 fn calc_coeffs(sample_rate: f32, filter_type: u32, cutoff: f32, q: f32, gain: f32) -> [f32; 5] {
     let sr = sample_rate;
     let fc = cutoff.clamp(20.0, sr * 0.49);
-    let q = if q <= 0.0 { 0.001 } else { q };
+    let q = if q < 0.1 { 0.707 } else { q };
     let a = 10.0_f32.powf(gain / 40.0);
     let omega = 2.0 * std::f32::consts::PI * fc / sr;
     let sn = omega.sin();

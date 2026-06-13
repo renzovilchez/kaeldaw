@@ -7,7 +7,6 @@ import { useClipsStore } from "@kaeldaw/project/useClipsStore";
 import { useMidiStore } from "@kaeldaw/project/useMidiStore";
 import { useUndoStore } from "@kaeldaw/project/useUndoStore";
 import { PolySynthOutput } from "@kaeldaw/instruments/PolySynthOutput";
-import { AudioScheduler, type MidiEvent } from "@kaeldaw/audio-engine/AudioScheduler";
 import { Transport } from "@kaeldaw/audio-engine/Transport";
 import { saveProjectFile, loadProjectFile } from "@kaeldaw/project/save-load";
 import { exportWav, createDownloadLink, revokeDownloadLink } from "@kaeldaw/project/wav-export";
@@ -35,7 +34,7 @@ function TimelineWindow() {
   const elRef = useRef<HTMLElement>(null);
 
   const tracksRef = useRef(tracks);
-  tracksRef.current = tracks;
+  useEffect(() => { tracksRef.current = tracks; }, [tracks]);
 
   useEffect(() => {
     const el = elRef.current;
@@ -62,10 +61,9 @@ function TimelineWindow() {
 
   // Attach event handlers once — use refs for latest store actions + tracks
   const handlersRef = useRef({ addClip, moveClip, resizeClip, removeClip });
-  handlersRef.current = { addClip, moveClip, resizeClip, removeClip };
+  useEffect(() => { handlersRef.current = { addClip, moveClip, resizeClip, removeClip }; }, [addClip, moveClip, resizeClip, removeClip]);
 
-  const loadMidiRef = useRef(() => {});
-  loadMidiRef.current = () => {
+  const loadMidi = useCallback(() => {
     const wc = elRef.current as any;
     if (!wc) return;
     const clipId = (wc as any).selectedClipId;
@@ -74,7 +72,7 @@ function TimelineWindow() {
     if (clip) {
       useMidiStore.getState().loadForClip(clipId, clip.notes);
     }
-  };
+  }, []);
 
   useEffect(() => {
     const el = elRef.current;
@@ -109,11 +107,11 @@ function TimelineWindow() {
       handlersRef.current.removeClip(d.clipId);
     };
 
-    const onClipSelect = (_e: Event) => {
-      loadMidiRef.current();
+    const onClipSelect = (_: Event) => {
+      loadMidi();
     };
 
-    const onClipDblClick = (_e: Event) => {
+    const onClipDblClick = (_: Event) => {
       toggle("piano-roll");
     };
 
@@ -133,6 +131,7 @@ function TimelineWindow() {
     };
   }, []);
 
+  // eslint-disable-next-line react-hooks/refs
   return createElement("daw-timeline", {
     ref: elRef,
     style: { width: "100%", height: "100%", display: "block" },
@@ -167,7 +166,7 @@ function PianoRollWindow() {
 
   // Attach event handlers once — use refs for latest store actions
   const handlersRef = useRef({ addNote, moveNote, resizeNote, removeNote });
-  handlersRef.current = { addNote, moveNote, resizeNote, removeNote };
+  useEffect(() => { handlersRef.current = { addNote, moveNote, resizeNote, removeNote }; }, [addNote, moveNote, resizeNote, removeNote]);
 
   useEffect(() => {
     const el = elRef.current;
@@ -213,6 +212,7 @@ function PianoRollWindow() {
     };
   }, []);
 
+  // eslint-disable-next-line react-hooks/refs
   return createElement("daw-piano-roll", {
     ref: elRef,
     style: { width: "100%", height: "100%", display: "block" },
@@ -247,6 +247,7 @@ function WaveformWindow() {
         background: "#353535",
       },
     },
+    // eslint-disable-next-line react-hooks/refs
     createElement("daw-waveform", {
       ref: elRef,
       style: { width: "100%", height: "100%", display: "block" },
@@ -288,10 +289,10 @@ function AppInner() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [undo, redo]);
 
-  // Bridge metronome store → PolySynthOutput
+  // Bridge metronome store → PolySynthOutput worklet
   const metronomeEnabled = useTransportStore((s) => s.metronomeEnabled);
   useEffect(() => {
-    PolySynthOutput.setMetronomeEnabled(metronomeEnabled);
+    PolySynthOutput.setMetronome(metronomeEnabled, 960, useTransportStore.getState().timeSignature.beats);
   }, [metronomeEnabled]);
 
   // Wire PolySynthOutput to mixer store while playing + MIDI scheduler
@@ -312,7 +313,8 @@ function AppInner() {
 
       (async () => {
         try {
-          await PolySynthOutput.start(instrumentManager.getSelectedConfig());
+          await PolySynthOutput.start();
+          PolySynthOutput.setConfig(instrumentManager.getSelectedConfig());
         } catch (err) {
           console.error("PolySynthOutput.start() failed:", err);
           return;
@@ -320,22 +322,20 @@ function AppInner() {
         if (cancelled) return;
 
         const clips = useClipsStore.getState().clips;
-        const events: MidiEvent[] = [];
+        const events: { tick: number; type: string; note: number; velocity: number }[] = [];
         for (const clip of clips) {
           for (const n of clip.notes) {
             events.push({ tick: (clip.startTick + n.startTick) * VISUAL_TO_PPQN, type: "on", note: n.note, velocity: n.velocity });
             events.push({ tick: (clip.startTick + n.startTick + n.durationTicks) * VISUAL_TO_PPQN, type: "off", note: n.note, velocity: 0 });
           }
         }
-        events.sort((a, b) => a.tick - b.tick);
 
-        AudioScheduler.setEvents(events);
-        AudioScheduler.start(Transport.position);
+        PolySynthOutput.startScheduled(events, Transport.bpm, Transport.ppqn, Transport.position);
       })();
 
       return () => {
         cancelled = true;
-        AudioScheduler.stop();
+        PolySynthOutput.allNotesOff();
         PolySynthOutput.stop();
         for (const ch of useMixerStore.getState().channels) {
           setMeterLevel(ch.id, 0);
@@ -343,7 +343,7 @@ function AppInner() {
         setMasterMeterLevel(0);
       };
     } else {
-      AudioScheduler.stop();
+      PolySynthOutput.allNotesOff();
       PolySynthOutput.stop();
       for (const ch of useMixerStore.getState().channels) {
         setMeterLevel(ch.id, 0);
