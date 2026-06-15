@@ -450,7 +450,7 @@ export class Timeline extends HTMLElement {
     }
   }
 
-  private _handleMouseUp(_e: MouseEvent) {
+  private _handleMouseUp() {
     if (this._dragState) {
       const clip = this._clips.find((c) => c.id === this._dragState!.clipId);
       if (clip) {
