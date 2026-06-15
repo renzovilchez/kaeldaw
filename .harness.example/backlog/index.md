@@ -1,24 +1,33 @@
 # Backlog
 
-## In Progress
+## Fase actual — descripción de lo que se busca lograr
 
-_(vacio — elegir que hacer)_
+Cuando esté: descripción del objetivo de la fase actual.
 
-## Ready
+### Bugs
 
-| ID | Titulo | Prioridad |
-|----|--------|-----------|
-| feat-001 | Primera funcionalidad del proyecto | alta |
+| # | Problema |
+|---|----------|
 
-## Backlog
+### Features pendientes
 
-| ID | Titulo | Notas |
-|----|--------|-------|
-| feat-002 | Segunda funcionalidad | — |
-| fix-001 | Bug conocido por corregir | — |
+| # | Feature |
+|---|---------|
+
+### UI / UX
+
+| # | Tarea |
+|---|-------|
+
+---
 
 ## Done
 
-| ID | Titulo | Commit |
-|----|--------|--------|
-| — | — | — |
+| ID | Título |
+|----|--------|
+
+---
+
+## Próximas fases (sin tickets hasta que lleguemos)
+
+Descripción general de lo que vendrá después. Sin tickets, sin fechas, sin rigidéz.
