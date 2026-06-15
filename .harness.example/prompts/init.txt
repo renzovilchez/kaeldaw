@@ -1,3 +1,4 @@
-Lee AGENTS.md y .harness/context/.
-Crea .harness/progress/session-progress.md con estado inicial.
-No escribas codigo de negocio.
+Crear backlog/index.md vacio y progress/session-progress.md con estado inicial.
+Leer rules/ para entender git-flow y supervision.
+Leer context/ para arquitectura y convenciones del proyecto.
+No escribir codigo de negocio.

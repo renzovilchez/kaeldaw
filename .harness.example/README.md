@@ -1,123 +1,88 @@
 # .harness — Sistema de desarrollo agéntico
 
-Directorio privado de desarrollo que orquesta el flujo de trabajo entre un agente IA y el desarrollador. Cada desarrollador tiene el suyo (`.harness/` está en `.gitignore`).
+Directorio privado de desarrollo que orquesta el flujo de trabajo entre un agente IA y el desarrollador.
+Cada desarrollador tiene el suyo (poner `.harness/` en `.gitignore`).
+
+---
 
 ## Estructura
 
 ```
 .harness/
 ├── README.md              # Este archivo
-├── features/
-│   └── features.json      # Roadmap del proyecto (tareas, fases, estados)
-├── specs/
-│   ├── aer-template.md    # Template para escribir AERs
-│   ├── active/            # AERs en escritura (borrador)
-│   ├── approved/          # AERs aprobados, listos para implementar
-│   ├── passing/           # AERs implementados y verificados
-│   └── archive/           # AERs completados (historial)
-├── rules/
-│   ├── sdd.md             # Spec-Driven Development — ciclo completo
-│   ├── git-flow.md        # Estrategia de ramas
-│   ├── lifecycle.md       # Fases de trabajo por sesion
-│   ├── supervision.md     # Control humano obligatorio
-│   ├── permissions.md     # Permisos del agente por modo
-│   └── testing.md         # Convenciones de testing
+├── backlog/
+│   ├── index.md           # Estado actual: goals, tickets, progreso
+│   └── tickets/           # Tickets individuales (feat, fix, refactor, chore)
+├── skills/
+│   └── session.md         # Skill para cargar al iniciar sesion (opencode)
 ├── progress/
-│   ├── session-progress.md  # Ultimas sesiones (carga rapida del agente)
-│   └── session-archive.md   # Historial completo de sesiones (append-only)
-├── context/               # Documentos del proyecto: arquitectura, convenciones, prioridades
-├── prompts/               # Instrucciones para el agente (coding, eval, init)
-└── workflows/             # Procedimientos operativos del agente
+│   ├── session-progress.md  # Ultimas sesiones
+│   └── session-archive.md   # Historial completo (append-only)
+├── context/               # Documentacion del proyecto
+├── rules/
+│   ├── git-flow.md        # Estrategia de ramas
+│   └── supervision.md     # Comandos peligrosos y protocolo de commit
+├── features/
+│   └── features.json      # (opcional) Roadmap historico
+├── specs/
+│   └── aer-template.md    # (opcional) Para features complejas
+├── prompts/               # Instrucciones de arranque
+└── workflows/             # Procedimientos del agente
 ```
 
-## Cada carpeta
+---
 
-### features/ — Roadmap
+## Sistema de trabajo
 
-`features.json` contiene la lista de tareas del proyecto. Cada tarea tiene:
+### Backlog tickets
 
-| Campo | Descripcion |
-|-------|-------------|
-| `id` | Identificador unico (feat-001, fix-001, chore-001) |
-| `type` | Tipo: feat, fix, refactor, chore |
-| `name` | Nombre descriptivo |
-| `phase` | Fase (F0, F1, ...) |
-| `priority` | Prioridad dentro de la fase (1 = mas alta) |
-| `status` | pending, approved, working, failing, passing, archive |
-| `package` | Paquete donde se implementa |
-| `aer` | Ruta al AER en specs/ |
-| `test` | Ruta al archivo de test principal |
-| `depends` | IDs de tareas de las que depende |
+Los tickets están en `backlog/tickets/`. Cada uno es un `.md` con frontmatter:
 
-Las fases son libres. Cada proyecto define las suyas. Si no tienes un roadmap definido, `features.json` puede estar vacio y crear tareas sobre la marcha.
+```md
+---
+id: feat-001
+type: feat
+title: Descripcion corta
+status: ready
+---
+```
 
-### specs/ — AERs (Actor-Event-Response)
+Estados: `backlog` → `ready` → `in_progress` → `done`
 
-Cada tarea tiene un AER que especifica el comportamiento exacto sin ambigüedad. Viajan por 4 estados:
+- Un ticket **no necesita AER**. Si el usuario lo entiende, alcanza.
+- Para features complejas, se puede escribir un AER opcional en `specs/`.
+- No trabajar más de un ticket `in_progress` a la vez.
 
-- `active/` → borrador, escribiendo
-- `approved/` → listo para implementar
-- `passing/` → implementado, tests pasan
-- `archive/` → completado, commit hecho
+### Skills (opencode)
 
-Siempre se mueve el archivo (MOVE, no copy). El template `aer-template.md` tiene el formato completo.
+Si usas opencode como agente, copia `skills/session.md` a
+`.opencode/skills/<tu-proyecto>/SKILL.md` y adáptalo.
 
-### rules/ — Reglas del agente
+Al empezar cada sesión: `skill <tu-proyecto>`
 
-- **sdd.md** — ciclo SDD: requerimiento → AER → tests → implementación → verificación
-- **lifecycle.md** — fases de cada sesión de trabajo
-- **supervision.md** — comandos peligrosos, modos de falla, protocolo de commit
-- **permissions.md** — permisos de lectura/escritura por modo
-- **testing.md** — estados y transiciones de features.json
-- **git-flow.md** — estrategia de ramas (main, develop, feat-*, fix-*)
+### Sesión típica
 
-Son modificables. Si tu proyecto usa otro flujo, ajustalos.
+```
+1. Agente carga skill → lee backlog + progress
+2. Pregunta: "¿Qué hacemos hoy?"
+3      . Desarrollador elige ticket
+4. Agente implementa, verifica (build + lint), muestra cambios
+5. Solo commitea cuando el desarrollador aprueba
+6. Al cerrar: actualiza progress
+```
 
-### progress/ — Memoria del agente
+### AER (opcional, solo para features complejas)
 
-El agente usa estos archivos para recordar el contexto entre sesiones:
+Para features grandes o ambiguas, se puede escribir un AER en `specs/`
+usando `aer-template.md`. No es obligatorio — los tickets describen el *qué*.
 
-- `session-progress.md` — resumen de las ultimas 5 sesiones (carga rapida al iniciar)
-- `session-archive.md` — historial completo, append-only, busca por ID de sesion
-
-Cada entrada incluye: fecha, feature trabajado, archivos modificados, decisiones técnicas, bloqueos, commits, siguiente paso.
-
-Sin estos archivos el agente empieza cada sesion sin contexto.
-
-### context/ — Documentación del proyecto
-
-El agente lee esta carpeta para entender el proyecto. Tipico contenido:
-
-- `architecture.md` — estructura del monorepo, stack tecnologico, dependencias entre paquetes
-- `conventions.md` — naming, estructura de archivos, reglas de codigo
-
-Sin estos archivos el agente no conoce la arquitectura ni las convenciones.
-
-### prompts/ — Instrucciones de arranque
-
-Archivos de texto que el agente lee al iniciar cada modo:
-
-- `coding.txt` — flujo de trabajo para desarrollo normal
-- `init.txt` — configuración inicial del proyecto
-- `eval.txt` — lectura y evaluacion, sin modificar codigo
-
-### workflows/ — Procedimientos
-
-Archivos markdown con el paso a paso para cada tipo de tarea:
-
-- `new-feature.md` — ciclo completo SDD para una feature nueva
-- `fix-bug.md` — correccion de bugs
-- `add-package.md` — agregar un nuevo paquete al monorepo
-- `fix-bug.md` — correccion de bugs
-
-Cada workflow describe fases, criterios y outputs esperados.
+---
 
 ## Como empezar
 
 1. `cp -r .harness.example .harness`
-2. Pobla `context/` con la documentacion de tu proyecto
-3. Pon `.harness/` en `.gitignore`
-4. Ajusta `rules/` si tu flujo es diferente
-5. Crea tu primer feature: escribe un AER en `specs/active/`, presentalo al agente
-
-No hay dependencias externas. Solo archivos de texto.
+2. Pon `.harness/` en `.gitignore`
+3. Puebla `context/` con la documentacion de tu proyecto
+4. Ajusta `rules/git-flow.md` a tu estrategia de ramas
+5. Crea `backlog/tickets/` con tu primer ticket
+6. Si usas opencode, copia `skills/session.md` a `.opencode/skills/`

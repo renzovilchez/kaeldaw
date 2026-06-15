@@ -1,83 +1,27 @@
-# AGENTS.md — Reglas de comportamiento KaelDAW
+# AGENTS.md — KaelDAW
 
-## Identidad
-
-Eres un agente de desarrollo para KaelDAW, un DAW web. Trabajas en sesiones cortas y enfocadas.
-
-## Deny rules (nunca hagas esto)
-
-- Nunca modificar package.json, tsconfig.json o vite.config.ts sin preguntar.
-- Nunca borrar archivos de test existentes.
-- Nunca declarar un feature como passing sin test end-to-end.
-- Nunca commitear codigo que no compila.
-- Nunca trabajar en mas de un feature por sesion.
-- Nunca escribir codigo sin un AER aprobado (ver .harness/rules/sdd.md).
-- Nunca escribir tests sin leer primero el AER del feature.
-- Nunca hacer git push, pnpm publish, gh pr create sin orden directa.
-- Nunca hacer git commit sin mostrar los cambios y preguntar primero.
-- Nunca mergear ramas (develop → main, feat-* → develop) sin aprobacion explicita.
-- Nunca commitear directo a main (la unica excepcion es el commit inicial del repo).
-
-## Allow rules (puedes hacer esto sin preguntar)
-
-- Crear archivos .ts, .tsx, .css, .rs dentro de apps/, packages/, crates/.
-- Leer cualquier archivo del repo.
-- Ejecutar comandos de build/lint: pnpm run build, pnpm run lint.
-- Actualizar .harness/features/features.json y .harness/progress/kaeldaw-progress.md.
-- Actualizar .harness/specs/ con AERs (borrador, approved, passing, archive).
-- Poblar el campo `test` en features.json con la ruta al archivo de test principal al mover un AER a passing/.
-
-## Reglas de edición de features.json
-
-NUNCA editar features.json con el `edit` tool. Usar exclusivamente el script:
+Lee la skill de sesión para comenzar. Contiene todas las reglas activas.
 
 ```
-node scripts/set-feature-status.mjs <id> <status>
+skill kaeldaw-session
 ```
 
-Ejemplo: `node scripts/set-feature-status.mjs feat-014 passing`
+## Deny rules críticas (no negociables)
 
-Esto garantiza que no se duplique el campo `type`.
-- Hacer git add + git commit solo despues de que el usuario confirme explicitamente (ver .harness/rules/supervision.md).
-- Crear ramas feat-*, fix-*, refactor-*, chore-* desde develop con `git checkout -b`.
-- Hacer checkout entre ramas existentes.
+- No modificar `package.json`, `tsconfig.json`, `vite.config.ts` sin preguntar.
+- No borrar archivos de test existentes.
+- No commiteear código sin build exitoso.
+- No commitear directo a `main`.
+- No hacer push, merge, PR sin orden directa.
 
 ## Tool scoping
 
-- file_search: solo dentro de apps/, packages/, crates/ y .harness/.
-- bash: solo comandos de pnpm, git, y node. No rm -rf sin confirmacion.
-- edit: solo archivos que existen o que el mismo creo en la sesion actual.
-
-## Supervisor
-
-Ver .harness/rules/supervision.md. Ningun comando peligroso se ejecuta sin aprobacion explicita.
+- `file_search`: solo `apps/`, `packages/`, `crates/`, `.harness/`.
+- `bash`: solo pnpm, git, node. `rm -rf` requiere confirmación.
+- `edit`/`write`: solo archivos existentes o creados en esta sesión.
 
 ## Requisitos del proyecto
 
-Antes de trabajar en features que requieran Rust (feat-010 en adelante), verificar:
-
-- `rustc --version` (>= 1.80)
-- `wasm-pack --version` (>= 0.13)
-- `wasm32-unknown-unknown` target: `rustup target list --installed`
-- Windows: `link.exe` en PATH (VS Build Tools con VC++ workload)
-- macOS: `xcode-select -p`
-- Linux: `which gcc`
-
-Para features solo TypeScript/JS, solo se necesita Node.js + pnpm.
-
-## Memoria
-
-- Al inicio de cada sesion (CARGA RAPIDA): leer kaeldaw-progress.md (ultimas 5 sesiones) y specs/approved/ (AERs activos).
-- Cuando se necesita contexto historico: buscar en kaeldaw-archive.md por ID de sesion o feature.
-- Al final de cada sesion: escribir resumen en kaeldaw-progress.md (ultimas 5) y detalle completo en kaeldaw-archive.md (append).
-- Si la sesion supera 12 intercambios, resumir y re-leer features.json + specs/approved/ + progress.
-
-## SDD — Spec-Driven Development
-
-KaelDAW sigue SDD. El ciclo es siempre:
-
-```
-Requerimiento → AER (spec) → Tests (TDD red) → Implementacion (TDD green) → Verificacion → Handoff
-```
-
-Ver .harness/rules/sdd.md para detalles. Ver .harness/specs/aer-template.md para el formato AER.
+Para features Rust: `rustc >= 1.80`, `wasm-pack >= 0.13`,
+`wasm32-unknown-unknown` instalado, y linker C disponible.
+Para TS/JS: solo Node.js + pnpm.
