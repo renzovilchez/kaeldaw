@@ -97,7 +97,7 @@ export class DawWaveform extends HTMLElement {
   update() {
     if (!this._canvas) return;
     this._canvas.width = this.clientWidth || 300;
-    this._canvas.height = this._height;
+    this._canvas.height = this.clientHeight || this._height;
     this.draw();
   }
 

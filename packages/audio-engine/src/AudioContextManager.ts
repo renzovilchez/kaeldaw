@@ -10,7 +10,7 @@ class AudioContextManagerSingleton {
 
   init(): void {
     if (this.ctx) return;
-    this.ctx = new AudioContext();
+    this.ctx = new AudioContext({ latencyHint: "interactive" });
     this._state = this.ctx.state as AudioContextManagerState;
   }
 

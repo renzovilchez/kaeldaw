@@ -11,7 +11,7 @@ export interface TransportStore {
   ppqn: number;
   timeSignature: { beats: number; beatValue: number };
   metronomeEnabled: boolean;
-  play: () => void;
+  play: () => Promise<void>;
   pause: () => void;
   stop: () => void;
   setBpm: (bpm: number) => void;
@@ -34,9 +34,9 @@ export const useTransportStore = create<TransportStore>((set) => ({
   ppqn: Transport.ppqn,
   timeSignature: { ...Transport.timeSignature },
   metronomeEnabled: false,
-  play: () => {
+  play: async () => {
     AudioContextManager.init();
-    void AudioContextManager.resume();
+    await AudioContextManager.resume();
     Transport.play();
     Clock.start();
     set({ state: Transport.state, position: Transport.position });
