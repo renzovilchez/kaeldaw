@@ -39,19 +39,25 @@ const defaults: Record<WindowId, Omit<WindowState, "id" | "zIndex">> = {
   "waveform":    { title: "Waveform",   isOpen: false, isMinimized: false, isMaximized: false, position: { x: 260, y: 100 }, size: { width: 600, height: 200 } },
 };
 
-function buildInitial(): Record<WindowId, WindowState> {
-  const saved = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
-  if (saved) {
-    try {
-      return JSON.parse(saved) as Record<WindowId, WindowState>;
-    } catch { /* ignore */ }
-  }
+function buildDefault(): Record<WindowId, WindowState> {
   const entries = Object.entries(defaults) as [WindowId, typeof defaults[WindowId]][];
   const r: Record<string, WindowState> = {};
   for (const [id, val] of entries) {
     r[id] = { id, ...val, zIndex: id === "timeline" ? 2 : id === "tracks" ? 1 : 0 };
   }
   return r as Record<WindowId, WindowState>;
+}
+
+function buildInitialState(): State {
+  const saved = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
+  if (saved) {
+    try {
+      const windows = JSON.parse(saved) as Record<WindowId, WindowState>;
+      const maxZ = Math.max(0, ...Object.values(windows).map((w) => w.zIndex));
+      return { nextZ: maxZ + 1, windows };
+    } catch { /* ignore */ }
+  }
+  return { nextZ: 10, windows: buildDefault() };
 }
 
 function reducer(state: State, action: Action): State {
@@ -94,8 +100,11 @@ function reducer(state: State, action: Action): State {
       if (!w || w.isMaximized) return state;
       return { ...state, windows: { ...state.windows, [action.id]: { ...w, size: { width: action.width, height: action.height } } } };
     }
-    case "LOAD":
-      return { ...state, windows: action.windows };
+    case "LOAD": {
+      const incoming = action.windows;
+      const maxZ = Math.max(0, ...Object.values(incoming).map((w) => w.zIndex));
+      return { ...state, nextZ: Math.max(state.nextZ, maxZ + 1), windows: incoming };
+    }
     default:
       return state;
   }
@@ -114,7 +123,7 @@ const Ctx = createContext<{
 } | null>(null);
 
 export function WindowManagerProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, { nextZ: 10, windows: buildInitial() });
+  const [state, dispatch] = useReducer(reducer, undefined, buildInitialState);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Debounced localStorage save (500ms after last change)
