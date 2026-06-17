@@ -14,6 +14,12 @@ const BLACK_KEYS = new Set([1, 3, 6, 8, 10]);
 
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 
+const KEYBOARD_MIDI_MAP: Record<string, number> = {
+  "z": 48, "s": 49, "x": 50, "d": 51, "c": 52, "v": 53, "g": 54, "b": 55, "h": 56, "n": 57, "j": 58, "m": 59,
+  "q": 60, "2": 61, "w": 62, "3": 63, "e": 64, "r": 65, "5": 66, "t": 67, "6": 68, "y": 69, "7": 70, "u": 71,
+  "i": 72, "9": 73, "o": 74, "0": 75, "p": 76,
+};
+
 export type MidiNoteData = {
   id: number;
   note: number;
@@ -37,6 +43,7 @@ export class PianoRoll extends HTMLElement {
   private _totalDurationTicks = 3840;
   private _selectedNoteId: number | null = null;
   private _snapUnit: number = 6;
+  private _previewNote: number | null = null;
 
   private _dragState: {
     type: "move" | "resize" | "create" | null;
@@ -53,11 +60,13 @@ export class PianoRoll extends HTMLElement {
   private _drag: ReturnType<typeof createDragHandlers> | null = null;
   private _onWheel: (e: WheelEvent) => void;
   private _onKeyDown: (e: KeyboardEvent) => void;
+  private _onKeyUp: (e: KeyboardEvent) => void;
 
   constructor() {
     super();
     this._onWheel = this._handleWheel.bind(this);
     this._onKeyDown = this._handleKeyDown.bind(this);
+    this._onKeyUp = this._handleKeyUp.bind(this);
   }
 
   connectedCallback() {
@@ -67,6 +76,7 @@ export class PianoRoll extends HTMLElement {
     this.update();
     this.addEventListener("wheel", this._onWheel, { passive: false });
     this.addEventListener("keydown", this._onKeyDown);
+    this.addEventListener("keyup", this._onKeyUp);
     this.tabIndex = 0;
     this._resizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => this.update()) : null;
     this._resizeObserver?.observe(this);
@@ -79,6 +89,7 @@ export class PianoRoll extends HTMLElement {
     this._drag?.detach(this);
     this.removeEventListener("wheel", this._onWheel);
     this.removeEventListener("keydown", this._onKeyDown);
+    this.removeEventListener("keyup", this._onKeyUp);
     this._stopRaf();
   }
 
@@ -369,7 +380,13 @@ export class PianoRoll extends HTMLElement {
     const target = e.target as HTMLElement;
     if (target !== this._canvas) return;
     const canvasX = e.clientX - this._canvas!.getBoundingClientRect().left;
-    if (canvasX < KEY_WIDTH) return;
+    if (canvasX < KEY_WIDTH) {
+      const note = this._noteFromY(e.clientY);
+      if (note < this._noteEnd || note > this._noteStart) return;
+      this._previewNote = note;
+      this.dispatchEvent(new CustomEvent("key-preview", { detail: { note } }));
+      return;
+    }
 
     const existing = this._findNoteAt(e.clientX, e.clientY);
     if (existing) {
@@ -430,6 +447,11 @@ export class PianoRoll extends HTMLElement {
   }
 
   private _onDragEnd() {
+    if (this._previewNote !== null) {
+      this.dispatchEvent(new CustomEvent("key-release", { detail: { note: this._previewNote } }));
+      this._previewNote = null;
+      return;
+    }
     if (!this._dragState) return;
     const drag = this._dragState;
     const n = this._notes.find((x) => x.id === drag.noteId);
@@ -458,6 +480,13 @@ export class PianoRoll extends HTMLElement {
   }
 
   private _handleKeyDown(e: KeyboardEvent) {
+    if (e.repeat) return;
+    const midiNote = KEYBOARD_MIDI_MAP[e.key];
+    if (midiNote !== undefined) {
+      this.dispatchEvent(new CustomEvent("key-preview", { detail: { note: midiNote } }));
+      e.preventDefault();
+      return;
+    }
     if (e.key === "Delete" || e.key === "Backspace") {
       if (this._selectedNoteId !== null) {
         this.dispatchEvent(new CustomEvent("before-note-action", {
@@ -468,6 +497,13 @@ export class PianoRoll extends HTMLElement {
         this.dispatchEvent(new CustomEvent("note-delete", { detail: { noteId: id } }));
         e.preventDefault();
       }
+    }
+  }
+
+  private _handleKeyUp(e: KeyboardEvent) {
+    const midiNote = KEYBOARD_MIDI_MAP[e.key];
+    if (midiNote !== undefined) {
+      this.dispatchEvent(new CustomEvent("key-release", { detail: { note: midiNote } }));
     }
   }
 }

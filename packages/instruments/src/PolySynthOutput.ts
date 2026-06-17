@@ -431,6 +431,7 @@ export class PolySynthOutputSingleton {
   get synthInstance(): null { return null; }
   get delayEnabled(): boolean { return this._delayEnabled; }
   get reverbEnabled(): boolean { return this._reverbEnabled; }
+  get isStarted(): boolean { return this._worklet !== null; }
 
   setDelayEnabled(on: boolean): void {
     this._delayEnabled = on;

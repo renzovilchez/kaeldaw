@@ -6,8 +6,10 @@ import { useTransportStore } from "@kaeldaw/project/useTransportStore";
 import { useClipsStore } from "@kaeldaw/project/useClipsStore";
 import { useMidiStore } from "@kaeldaw/project/useMidiStore";
 import { useUndoStore, type UndoContext } from "@kaeldaw/project/useUndoStore";
+import { useSyncNotesToWC } from "./hooks/useSyncNotesToWC";
 import { PolySynthOutput } from "@kaeldaw/instruments/PolySynthOutput";
 import { Transport } from "@kaeldaw/audio-engine/Transport";
+import { AudioContextManager } from "@kaeldaw/audio-engine/AudioContextManager";
 import { saveProjectFile, loadProjectFile } from "@kaeldaw/project/save-load";
 import { createDownloadLink, revokeDownloadLink } from "@kaeldaw/project/wav-export";
 import { renderProject } from "./export/renderProject";
@@ -222,6 +224,11 @@ const PianoRollWindow = memo(function PianoRollWindow({ undoRefs, redoRefs }: { 
   const resizeNote = useMidiStore((s) => s.resizeNote);
   const removeNote = useMidiStore((s) => s.removeNote);
   const elRef = useRef<HTMLElement>(null);
+  const previewStartedRef = useRef(false);
+  const transportState = useTransportStore((s) => s.state);
+  useEffect(() => {
+    if (transportState !== "playing") previewStartedRef.current = false;
+  }, [transportState]);
 
   useEffect(() => {
     const el = elRef.current;
@@ -229,14 +236,7 @@ const PianoRollWindow = memo(function PianoRollWindow({ undoRefs, redoRefs }: { 
     (el as any).playheadTick = position * PPQN_TO_VISUAL;
   }, [position]);
 
-  useEffect(() => {
-    const wc = elRef.current as any;
-    if (!wc || clipId === null) return;
-    wc.clearNotes();
-    for (const note of notes) {
-      wc.addNote(note.note, note.startTick, note.durationTicks, note.velocity, note.color, note.id);
-    }
-  }, [clipId, notes]);
+  useSyncNotesToWC(elRef, notes, clipId);
 
   const handlersRef = useRef({ addNote, moveNote, resizeNote, removeNote });
   useEffect(() => { handlersRef.current = { addNote, moveNote, resizeNote, removeNote }; }, [addNote, moveNote, resizeNote, removeNote]);
@@ -316,17 +316,41 @@ const PianoRollWindow = memo(function PianoRollWindow({ undoRefs, redoRefs }: { 
       sync();
     };
 
+    const onKeyPreview = async (e: Event) => {
+      const { note } = (e as CustomEvent).detail;
+      try {
+        if (!previewStartedRef.current) {
+          AudioContextManager.init();
+          await PolySynthOutput.start();
+          PolySynthOutput.setConfig(instrumentManager.getSelectedConfig());
+          previewStartedRef.current = true;
+        }
+        PolySynthOutput.noteOn(note, 100);
+      } catch (err) {
+        console.error("Key preview failed:", err);
+      }
+    };
+
+    const onKeyRelease = (e: Event) => {
+      const { note } = (e as CustomEvent).detail;
+      PolySynthOutput.noteOff(note);
+    };
+
     el.addEventListener("before-note-action", onBeforeNoteAction);
     el.addEventListener("note-add", onNoteAdd);
     el.addEventListener("note-move", onNoteMove);
     el.addEventListener("note-resize", onNoteResize);
     el.addEventListener("note-delete", onNoteDelete);
+    el.addEventListener("key-preview", onKeyPreview);
+    el.addEventListener("key-release", onKeyRelease);
     return () => {
       el.removeEventListener("before-note-action", onBeforeNoteAction);
       el.removeEventListener("note-add", onNoteAdd);
       el.removeEventListener("note-move", onNoteMove);
       el.removeEventListener("note-resize", onNoteResize);
       el.removeEventListener("note-delete", onNoteDelete);
+      el.removeEventListener("key-preview", onKeyPreview);
+      el.removeEventListener("key-release", onKeyRelease);
     };
   }, []);
 
