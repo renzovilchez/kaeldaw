@@ -59,7 +59,10 @@ export const useUndoStore = create<UndoStore>((set) => ({
   },
 
   executeAction: (context, getSnapshot) => {
-    history[context].push(getSnapshot());
+    const snap = getSnapshot();
+    if (context === "timeline") console.log("executeAction timeline - clips guardados:", (snap as any)?.clips?.length, "items");
+    if (context === "pianoRoll") console.log("executeAction pianoRoll - notes guardadas:", (snap as any)?.notes?.length, "items");
+    history[context].push(snap);
     if (history[context].length > MAX_HISTORY) history[context].shift();
     redoStack[context] = [];
     updateFlags(set);
@@ -67,18 +70,30 @@ export const useUndoStore = create<UndoStore>((set) => ({
 
   undo: (context, getCurrentState) => {
     const stack = history[context];
-    if (stack.length === 0) return null;
+    if (stack.length === 0) { console.log(`undo ${context}: sin historial`); return null; }
     const snapshot = stack.pop()!;
-    redoStack[context].push(getCurrentState());
+    const current = getCurrentState();
+    if (context === "timeline") {
+      const s = snapshot as any;
+      console.log("undo timeline - snapshot clips:", s?.clips?.length, "items - IDs:", s?.clips?.map((c: any) => c.id));
+      console.log("undo timeline - current clips:", (current as any)?.clips?.length, "items");
+    }
+    if (context === "pianoRoll") {
+      console.log("undo pianoRoll - snapshot notes:", (snapshot as any)?.notes?.length, "- current notes:", (current as any)?.notes?.length);
+    }
+    redoStack[context].push(current);
     updateFlags(set);
     return snapshot;
   },
 
   redo: (context, getCurrentState) => {
     const stack = redoStack[context];
-    if (stack.length === 0) return null;
+    if (stack.length === 0) { console.log(`redo ${context}: sin historial`); return null; }
     const snapshot = stack.pop()!;
-    history[context].push(getCurrentState());
+    const current = getCurrentState();
+    if (context === "timeline") console.log("redo timeline - restoring clips:", (snapshot as any)?.clips?.length, "items");
+    if (context === "pianoRoll") console.log("redo pianoRoll - restoring notes:", (snapshot as any)?.notes?.length, "items");
+    history[context].push(current);
     updateFlags(set);
     return snapshot;
   },

@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { useTransportStore } from "@kaeldaw/project/useTransportStore";
+import { useUndoStore } from "@kaeldaw/project/useUndoStore";
 import { useWindowManager } from "../stores/WindowManager";
 
 const MIN_BEATS = 1,
@@ -42,9 +43,6 @@ export function TopBar({
   onExport,
   onUndo,
   onRedo,
-  canUndo,
-  canRedo,
-  focusedContext,
 }: {
   projectName: string;
   onSetName: (name: string) => void;
@@ -53,10 +51,12 @@ export function TopBar({
   onExport: () => void;
   onUndo: () => void;
   onRedo: () => void;
-  canUndo: boolean;
-  canRedo: boolean;
-  focusedContext: string | null;
 }) {
+  const focusedContext = useUndoStore((s) => s.focusedContext);
+  const canUndoMap = useUndoStore((s) => s.canUndo);
+  const canRedoMap = useUndoStore((s) => s.canRedo);
+  const canUndo = focusedContext ? canUndoMap[focusedContext] : false;
+  const canRedo = focusedContext ? canRedoMap[focusedContext] : false;
   const { state, toggle } = useWindowManager();
   const bpm = useTransportStore((s) => s.bpm);
   const setBpm = useTransportStore((s) => s.setBpm);

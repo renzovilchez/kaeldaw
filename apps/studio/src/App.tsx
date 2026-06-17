@@ -1,4 +1,4 @@
-import { useRef, useEffect, createElement, useCallback, useState, type MutableRefObject } from "react";
+import { useRef, useEffect, createElement, useCallback, useState, memo, type MutableRefObject } from "react";
 import { useTracksStore } from "@kaeldaw/project/useTracksStore";
 import { useMixerStore } from "@kaeldaw/project/useMixerStore";
 import { useProjectStore } from "@kaeldaw/project/useProjectStore";
@@ -31,7 +31,7 @@ const PPQN_TO_VISUAL = TICKS_PER_BEAT_VISUAL / Transport.ppqn;
 
 type UndoFn = () => void;
 
-function TimelineWindow({ undoRefs, redoRefs }: { undoRefs: MutableRefObject<Record<UndoContext, UndoFn | null>>; redoRefs: MutableRefObject<Record<UndoContext, UndoFn | null>> }) {
+const TimelineWindow = memo(function TimelineWindow({ undoRefs, redoRefs }: { undoRefs: MutableRefObject<Record<UndoContext, UndoFn | null>>; redoRefs: MutableRefObject<Record<UndoContext, UndoFn | null>> }) {
   const tracks = useTracksStore((s) => s.tracks);
   const position = useTransportStore((s) => s.position);
   const clips = useClipsStore((s) => s.clips);
@@ -73,17 +73,23 @@ function TimelineWindow({ undoRefs, redoRefs }: { undoRefs: MutableRefObject<Rec
   // Register undo/redo for this context
   useEffect(() => {
     undoRefs.current.timeline = () => {
+      console.log("UNDO TIMELINE CALLED");
       const wc = elRef.current as any;
-      if (!wc) return;
+      if (!wc) { console.log("UNDO TIMELINE: wc null"); return; }
+      const before = wc.getClips().map((c: any) => ({ id: c.id, pos: c.startTick }));
+      console.log("UNDO TIMELINE: WC clips before restore:", JSON.stringify(before));
       const snap = useUndoStore.getState().undo("timeline", () => ({
         clips: wc.getClips(),
         nextId: (wc as any)._nextClipId,
       }));
-      if (!snap) return;
+      if (!snap) { console.log("UNDO TIMELINE: no snapshot"); return; }
       const s = snap as { clips: any[]; nextId: number };
+      console.log("UNDO TIMELINE: restoring snapshot clips:", JSON.stringify(s.clips.map(c => ({ id: c.id, pos: c.startTick }))));
       wc.clearClips();
       for (const clip of s.clips) wc.addClip(clip.trackIndex, clip.startTick, clip.durationTicks, clip.color, clip.name);
       (wc as any)._nextClipId = s.nextId;
+      const after = wc.getClips().map((c: any) => ({ id: c.id, pos: c.startTick }));
+      console.log("UNDO TIMELINE: WC clips after restore:", JSON.stringify(after));
     };
     redoRefs.current.timeline = () => {
       const wc = elRef.current as any;
@@ -185,9 +191,9 @@ function TimelineWindow({ undoRefs, redoRefs }: { undoRefs: MutableRefObject<Rec
     ref: elRef,
     style: { width: "100%", height: "100%", display: "block" },
   });
-}
+});
 
-function PianoRollWindow({ undoRefs, redoRefs }: { undoRefs: MutableRefObject<Record<UndoContext, UndoFn | null>>; redoRefs: MutableRefObject<Record<UndoContext, UndoFn | null>> }) {
+const PianoRollWindow = memo(function PianoRollWindow({ undoRefs, redoRefs }: { undoRefs: MutableRefObject<Record<UndoContext, UndoFn | null>>; redoRefs: MutableRefObject<Record<UndoContext, UndoFn | null>> }) {
   const position = useTransportStore((s) => s.position);
   const notes = useMidiStore((s) => s.notes);
   const clipId = useMidiStore((s) => s.clipId);
@@ -222,14 +228,14 @@ function PianoRollWindow({ undoRefs, redoRefs }: { undoRefs: MutableRefObject<Re
       if (!wc) return;
       const snap = useUndoStore.getState().undo("pianoRoll", () => ({
         notes: wc.getNotes(),
-        clipId: (wc as any).clipId ?? useMidiStore.getState().clipId,
+        clipId: useMidiStore.getState().clipId,
       }));
       if (!snap) return;
       const s = snap as { notes: any[]; clipId: number | null };
+      wc.clearNotes();
+      for (const n of s.notes) wc.addNote(n.note, n.startTick, n.durationTicks, n.velocity, n.color, n.id);
       if (s.clipId !== null) {
-        wc.clearNotes();
-        for (const n of s.notes) wc.addNote(n.note, n.startTick, n.durationTicks, n.velocity, n.color, n.id);
-        useMidiStore.setState({ clipId: s.clipId, notes: s.notes });
+        useMidiStore.setState({ clipId: s.clipId, notes: s.notes.map((n) => ({ ...n })) });
         useMidiStore.getState().syncToClips();
       }
     };
@@ -309,7 +315,7 @@ function PianoRollWindow({ undoRefs, redoRefs }: { undoRefs: MutableRefObject<Re
     ref: elRef,
     style: { width: "100%", height: "100%", display: "block" },
   });
-}
+});
 
 function WaveformWindow() {
   const elRef = useRef<HTMLElement>(null);
@@ -366,12 +372,7 @@ function AppInner() {
 
   const channelMap = new Map(channels.map((c) => [c.id, c]));
 
-  const focusedContext = useUndoStore((s) => s.focusedContext);
-  const canUndo = useUndoStore((s) => s.canUndo);
-  const canRedo = useUndoStore((s) => s.canRedo);
   const setFocusedContext = useUndoStore((s) => s.setFocusedContext);
-  const cUndo = focusedContext ? canUndo[focusedContext] : false;
-  const cRedo = focusedContext ? canRedo[focusedContext] : false;
 
   // Refs for per-context undo/redo functions registered by child components
   const undoFnsRef = useRef<Record<UndoContext, UndoFn | null>>({ timeline: null, pianoRoll: null, mixer: null, tracks: null });
@@ -436,8 +437,8 @@ function AppInner() {
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement).tagName === "INPUT" || (e.target as HTMLElement).tagName === "TEXTAREA") return;
       if (!(e.ctrlKey || e.metaKey)) return;
-      if (e.key === "z") { e.preventDefault(); handleUndo(); }
-      if (e.key === "y") { e.preventDefault(); handleRedo(); }
+      if (e.key === "z") { e.preventDefault(); console.log("CTRL+Z pressed, focusedContext:", useUndoStore.getState().focusedContext); handleUndo(); }
+      if (e.key === "y") { e.preventDefault(); console.log("CTRL+Y pressed, focusedContext:", useUndoStore.getState().focusedContext); handleRedo(); }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -591,8 +592,7 @@ function AppInner() {
     <div className="h-screen bg-[#2a2a2a] text-[#ccc] text-sm select-none flex flex-col overflow-hidden">
       <TopBar projectName={projectName} onSetName={setName}
         onSave={saveProjectFile} onLoad={loadProjectFile} onExport={handleExport}
-        onUndo={handleUndo} onRedo={handleRedo}
-        canUndo={cUndo} canRedo={cRedo} focusedContext={focusedContext} />
+        onUndo={handleUndo} onRedo={handleRedo} />
 
       {/* Content: Sidebar + Floating windows */}
       <div className="flex-1 flex overflow-hidden">
