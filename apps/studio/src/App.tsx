@@ -9,7 +9,9 @@ import { useUndoStore, type UndoContext } from "@kaeldaw/project/useUndoStore";
 import { PolySynthOutput } from "@kaeldaw/instruments/PolySynthOutput";
 import { Transport } from "@kaeldaw/audio-engine/Transport";
 import { saveProjectFile, loadProjectFile } from "@kaeldaw/project/save-load";
-import { exportWav, createDownloadLink, revokeDownloadLink } from "@kaeldaw/project/wav-export";
+import { createDownloadLink, revokeDownloadLink } from "@kaeldaw/project/wav-export";
+import { renderProject } from "./export/renderProject";
+import type { ExportProgress } from "./export/renderProject";
 import { WindowManagerProvider, useWindowManager } from "./stores/WindowManager";
 import { TopBar } from "./layout/TopBar";
 import { TrackList } from "./tracks/TrackList";
@@ -62,9 +64,12 @@ const TimelineWindow = memo(function TimelineWindow({ undoRefs, redoRefs }: { un
     const wc = elRef.current as any;
     if (!wc) return;
     wc.clearClips();
+    let maxId = 0;
     for (const clip of clips) {
-      wc.addClip(clip.trackIndex, clip.startTick, clip.durationTicks, clip.color, clip.name);
+      wc.addClip(clip.trackIndex, clip.startTick, clip.durationTicks, clip.color, clip.name, clip.id);
+      if (clip.id > maxId) maxId = clip.id;
     }
+    (wc as any)._nextClipId = maxId + 1;
   }, [version]);
 
   const handlersRef = useRef({ addClip, moveClip, resizeClip, removeClip });
@@ -570,12 +575,21 @@ function AppInner() {
     PolySynthOutput.setReverbEnabled(next);
   };
 
+  const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
+
   const handleExport = async () => {
-    const result = await exportWav({ sampleRate: 44100, bitDepth: 16 });
-    if (result.master) {
-      const a = createDownloadLink(result.master, `${projectName}.wav`);
-      a.click();
-      revokeDownloadLink(a);
+    setExportProgress({ percent: 0, stage: "Starting..." });
+    try {
+      const result = await renderProject(44100, (p) => setExportProgress({ ...p }));
+      if (result.master) {
+        const a = createDownloadLink(result.master, `${projectName}.wav`);
+        a.click();
+        revokeDownloadLink(a);
+      }
+    } catch (err) {
+      console.error("Export failed:", err);
+    } finally {
+      setExportProgress(null);
     }
   };
 
@@ -644,6 +658,21 @@ function AppInner() {
         </FloatingWindow>
       </div>
     </div>
+
+      {exportProgress && (
+        <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center">
+          <div className="bg-[#3a3a3a] rounded-lg p-6 shadow-xl w-80 text-center">
+            <div className="text-sm text-[#ccc] mb-3">{exportProgress.stage}</div>
+            <div className="w-full h-2 bg-[#555] rounded-full overflow-hidden">
+              <div
+                className="h-full bg-[#3b82f6] transition-all duration-200 rounded-full"
+                style={{ width: `${exportProgress.percent}%` }}
+              />
+            </div>
+            <div className="text-xs text-[#888] mt-2">{exportProgress.percent}%</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

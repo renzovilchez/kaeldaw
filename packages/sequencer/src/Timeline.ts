@@ -187,8 +187,9 @@ export class Timeline extends HTMLElement {
     this.scrollX = position;
   }
 
-  addClip(trackIndex: number, startTick: number, durationTicks: number, color = "#22d3ee", name = ""): number {
-    const id = this._nextClipId++;
+  addClip(trackIndex: number, startTick: number, durationTicks: number, color = "#22d3ee", name = "", externalId?: number): number {
+    const id = externalId ?? this._nextClipId++;
+    if (externalId !== undefined) this._nextClipId = Math.max(this._nextClipId, externalId + 1);
     this._clips.push({ id, trackIndex, startTick, durationTicks, color, name: name || `Clip ${id}` });
     return id;
   }

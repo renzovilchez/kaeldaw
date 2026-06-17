@@ -1,5 +1,9 @@
 let wasm: typeof import("kaeldaw-dsp") | null = null;
 
+export function getDspModule(): typeof import("kaeldaw-dsp") | null {
+  return wasm;
+}
+
 async function ensureWasm(): Promise<void> {
   if (wasm) return;
   const mod = await import("kaeldaw-dsp");
