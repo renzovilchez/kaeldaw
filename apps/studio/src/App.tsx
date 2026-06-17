@@ -1,11 +1,11 @@
-import { useRef, useEffect, createElement, useCallback, useState } from "react";
+import { useRef, useEffect, createElement, useCallback, useState, type MutableRefObject } from "react";
 import { useTracksStore } from "@kaeldaw/project/useTracksStore";
 import { useMixerStore } from "@kaeldaw/project/useMixerStore";
 import { useProjectStore } from "@kaeldaw/project/useProjectStore";
 import { useTransportStore } from "@kaeldaw/project/useTransportStore";
 import { useClipsStore } from "@kaeldaw/project/useClipsStore";
 import { useMidiStore } from "@kaeldaw/project/useMidiStore";
-import { useUndoStore } from "@kaeldaw/project/useUndoStore";
+import { useUndoStore, type UndoContext } from "@kaeldaw/project/useUndoStore";
 import { PolySynthOutput } from "@kaeldaw/instruments/PolySynthOutput";
 import { Transport } from "@kaeldaw/audio-engine/Transport";
 import { saveProjectFile, loadProjectFile } from "@kaeldaw/project/save-load";
@@ -18,11 +18,20 @@ import { FloatingWindow } from "./components/FloatingWindow";
 import { Sidebar } from "./instruments/Sidebar";
 import { instrumentManager } from "./stores/useInstrumentStore";
 
+const WINDOW_TO_CTX: Record<string, UndoContext> = {
+  "timeline": "timeline",
+  "piano-roll": "pianoRoll",
+  "mixer": "mixer",
+  "tracks": "tracks",
+};
+
 const TICKS_PER_BEAT_VISUAL = 24;
 const VISUAL_TO_PPQN = Transport.ppqn / TICKS_PER_BEAT_VISUAL;
 const PPQN_TO_VISUAL = TICKS_PER_BEAT_VISUAL / Transport.ppqn;
 
-function TimelineWindow() {
+type UndoFn = () => void;
+
+function TimelineWindow({ undoRefs, redoRefs }: { undoRefs: MutableRefObject<Record<UndoContext, UndoFn | null>>; redoRefs: MutableRefObject<Record<UndoContext, UndoFn | null>> }) {
   const tracks = useTracksStore((s) => s.tracks);
   const position = useTransportStore((s) => s.position);
   const clips = useClipsStore((s) => s.clips);
@@ -48,7 +57,6 @@ function TimelineWindow() {
     (el as any).playheadTick = position * PPQN_TO_VISUAL;
   }, [position]);
 
-  // Sync clips from store → WC when version changes (external load, not user edit)
   const version = useClipsStore((s) => s.version);
   useEffect(() => {
     const wc = elRef.current as any;
@@ -59,9 +67,39 @@ function TimelineWindow() {
     }
   }, [version]);
 
-  // Attach event handlers once — use refs for latest store actions + tracks
   const handlersRef = useRef({ addClip, moveClip, resizeClip, removeClip });
   useEffect(() => { handlersRef.current = { addClip, moveClip, resizeClip, removeClip }; }, [addClip, moveClip, resizeClip, removeClip]);
+
+  // Register undo/redo for this context
+  useEffect(() => {
+    undoRefs.current.timeline = () => {
+      const wc = elRef.current as any;
+      if (!wc) return;
+      const snap = useUndoStore.getState().undo("timeline", () => ({
+        clips: wc.getClips(),
+        nextId: (wc as any)._nextClipId,
+      }));
+      if (!snap) return;
+      const s = snap as { clips: any[]; nextId: number };
+      wc.clearClips();
+      for (const clip of s.clips) wc.addClip(clip.trackIndex, clip.startTick, clip.durationTicks, clip.color, clip.name);
+      (wc as any)._nextClipId = s.nextId;
+    };
+    redoRefs.current.timeline = () => {
+      const wc = elRef.current as any;
+      if (!wc) return;
+      const snap = useUndoStore.getState().redo("timeline", () => ({
+        clips: wc.getClips(),
+        nextId: (wc as any)._nextClipId,
+      }));
+      if (!snap) return;
+      const s = snap as { clips: any[]; nextId: number };
+      wc.clearClips();
+      for (const clip of s.clips) wc.addClip(clip.trackIndex, clip.startTick, clip.durationTicks, clip.color, clip.name);
+      (wc as any)._nextClipId = s.nextId;
+    };
+    return () => { undoRefs.current.timeline = null; redoRefs.current.timeline = null; };
+  }, []);
 
   const loadMidi = useCallback(() => {
     const wc = elRef.current as any;
@@ -87,8 +125,17 @@ function TimelineWindow() {
       if (!wc) return;
       const trackId = trackIdAt(d.trackIndex);
       if (!trackId) return;
+      useUndoStore.getState().executeAction("timeline", () => ({
+        clips: wc.getClips(),
+        nextId: (wc as any)._nextClipId,
+      }));
       const wcId = wc.addClip(d.trackIndex, d.tick, 96, "#22d3ee", "Clip");
       handlersRef.current.addClip({ trackId, trackIndex: d.trackIndex, startTick: d.tick, durationTicks: 96, color: "#22d3ee", name: "Clip", notes: [] }, wcId);
+    };
+
+    const onBeforeClipAction = (e: Event) => {
+      const d = (e as CustomEvent).detail;
+      useUndoStore.getState().executeAction("timeline", () => d);
     };
 
     const onClipMove = (e: Event) => {
@@ -115,6 +162,7 @@ function TimelineWindow() {
       open("piano-roll");
     };
 
+    el.addEventListener("before-clip-action", onBeforeClipAction);
     el.addEventListener("timeline-click", onTimelineClick);
     el.addEventListener("clip-move", onClipMove);
     el.addEventListener("clip-resize", onClipResize);
@@ -122,6 +170,7 @@ function TimelineWindow() {
     el.addEventListener("clip-select", onClipSelect);
     el.addEventListener("clip-dblclick", onClipDblClick);
     return () => {
+      el.removeEventListener("before-clip-action", onBeforeClipAction);
       el.removeEventListener("timeline-click", onTimelineClick);
       el.removeEventListener("clip-move", onClipMove);
       el.removeEventListener("clip-resize", onClipResize);
@@ -138,7 +187,7 @@ function TimelineWindow() {
   });
 }
 
-function PianoRollWindow() {
+function PianoRollWindow({ undoRefs, redoRefs }: { undoRefs: MutableRefObject<Record<UndoContext, UndoFn | null>>; redoRefs: MutableRefObject<Record<UndoContext, UndoFn | null>> }) {
   const position = useTransportStore((s) => s.position);
   const notes = useMidiStore((s) => s.notes);
   const clipId = useMidiStore((s) => s.clipId);
@@ -154,7 +203,6 @@ function PianoRollWindow() {
     (el as any).playheadTick = position * PPQN_TO_VISUAL;
   }, [position]);
 
-  // Sync notes when selected clip changes
   useEffect(() => {
     const wc = elRef.current as any;
     if (!wc || clipId === null) return;
@@ -162,11 +210,47 @@ function PianoRollWindow() {
     for (const note of notes) {
       wc.addNote(note.note, note.startTick, note.durationTicks, note.velocity, note.color, note.id);
     }
-  }, [clipId]);
+  }, [clipId, notes]);
 
-  // Attach event handlers once — use refs for latest store actions
   const handlersRef = useRef({ addNote, moveNote, resizeNote, removeNote });
   useEffect(() => { handlersRef.current = { addNote, moveNote, resizeNote, removeNote }; }, [addNote, moveNote, resizeNote, removeNote]);
+
+  // Register undo/redo for this context
+  useEffect(() => {
+    undoRefs.current.pianoRoll = () => {
+      const wc = elRef.current as any;
+      if (!wc) return;
+      const snap = useUndoStore.getState().undo("pianoRoll", () => ({
+        notes: wc.getNotes(),
+        clipId: (wc as any).clipId ?? useMidiStore.getState().clipId,
+      }));
+      if (!snap) return;
+      const s = snap as { notes: any[]; clipId: number | null };
+      if (s.clipId !== null) {
+        wc.clearNotes();
+        for (const n of s.notes) wc.addNote(n.note, n.startTick, n.durationTicks, n.velocity, n.color, n.id);
+        useMidiStore.setState({ clipId: s.clipId, notes: s.notes });
+        useMidiStore.getState().syncToClips();
+      }
+    };
+    redoRefs.current.pianoRoll = () => {
+      const wc = elRef.current as any;
+      if (!wc) return;
+      const snap = useUndoStore.getState().redo("pianoRoll", () => ({
+        notes: wc.getNotes(),
+        clipId: (wc as any).clipId ?? useMidiStore.getState().clipId,
+      }));
+      if (!snap) return;
+      const s = snap as { notes: any[]; clipId: number | null };
+      if (s.clipId !== null) {
+        wc.clearNotes();
+        for (const n of s.notes) wc.addNote(n.note, n.startTick, n.durationTicks, n.velocity, n.color, n.id);
+        useMidiStore.setState({ clipId: s.clipId, notes: s.notes });
+        useMidiStore.getState().syncToClips();
+      }
+    };
+    return () => { undoRefs.current.pianoRoll = null; redoRefs.current.pianoRoll = null; };
+  }, []);
 
   useEffect(() => {
     const el = elRef.current;
@@ -174,10 +258,16 @@ function PianoRollWindow() {
 
     const sync = () => useMidiStore.getState().syncToClips();
 
+    const onBeforeNoteAction = (e: Event) => {
+      const d = (e as CustomEvent).detail;
+      useUndoStore.getState().executeAction("pianoRoll", () => ({
+        notes: d.notes,
+        clipId: useMidiStore.getState().clipId,
+      }));
+    };
+
     const onNoteAdd = (e: Event) => {
       const d = (e as CustomEvent).detail;
-      const wc = elRef.current as any;
-      if (!wc) return;
       addNote({ note: d.note, startTick: d.startTick, durationTicks: d.durationTicks, velocity: 100, color: "#22d3ee" }, d.noteId);
       sync();
     };
@@ -200,11 +290,13 @@ function PianoRollWindow() {
       sync();
     };
 
+    el.addEventListener("before-note-action", onBeforeNoteAction);
     el.addEventListener("note-add", onNoteAdd);
     el.addEventListener("note-move", onNoteMove);
     el.addEventListener("note-resize", onNoteResize);
     el.addEventListener("note-delete", onNoteDelete);
     return () => {
+      el.removeEventListener("before-note-action", onBeforeNoteAction);
       el.removeEventListener("note-add", onNoteAdd);
       el.removeEventListener("note-move", onNoteMove);
       el.removeEventListener("note-resize", onNoteResize);
@@ -274,20 +366,99 @@ function AppInner() {
 
   const channelMap = new Map(channels.map((c) => [c.id, c]));
 
-  const executeAction = useUndoStore((s) => s.executeAction);
-  const undo = useUndoStore((s) => s.undo);
-  const redo = useUndoStore((s) => s.redo);
+  const focusedContext = useUndoStore((s) => s.focusedContext);
+  const canUndo = useUndoStore((s) => s.canUndo);
+  const canRedo = useUndoStore((s) => s.canRedo);
+  const setFocusedContext = useUndoStore((s) => s.setFocusedContext);
+  const cUndo = focusedContext ? canUndo[focusedContext] : false;
+  const cRedo = focusedContext ? canRedo[focusedContext] : false;
+
+  // Refs for per-context undo/redo functions registered by child components
+  const undoFnsRef = useRef<Record<UndoContext, UndoFn | null>>({ timeline: null, pianoRoll: null, mixer: null, tracks: null });
+  const redoFnsRef = useRef<Record<UndoContext, UndoFn | null>>({ timeline: null, pianoRoll: null, mixer: null, tracks: null });
+
+  // Register mixer and tracks undo/redo (these live in AppInner scope)
+  undoFnsRef.current.mixer = () => {
+    const state = useMixerStore.getState();
+    const snap = useUndoStore.getState().undo("mixer", () => ({
+      channels: state.channels.map((ch) => ({ ...ch })),
+      masterVolume: state.masterVolume,
+    }));
+    if (snap) {
+      const s = snap as { channels: any[]; masterVolume: number };
+      useMixerStore.setState({ channels: s.channels, masterVolume: s.masterVolume ?? 1 });
+    }
+  };
+  redoFnsRef.current.mixer = () => {
+    const state = useMixerStore.getState();
+    const snap = useUndoStore.getState().redo("mixer", () => ({
+      channels: state.channels.map((ch) => ({ ...ch })),
+      masterVolume: state.masterVolume,
+    }));
+    if (snap) {
+      const s = snap as { channels: any[]; masterVolume: number };
+      useMixerStore.setState({ channels: s.channels, masterVolume: s.masterVolume ?? 1 });
+    }
+  };
+  undoFnsRef.current.tracks = () => {
+    const state = useTracksStore.getState();
+    const snap = useUndoStore.getState().undo("tracks", () => ({
+      tracks: state.tracks.map((t) => ({ id: t.id, name: t.name })),
+    }));
+    if (snap) {
+      const s = snap as { tracks: { id: string; name: string }[] };
+      useTracksStore.setState({ tracks: s.tracks, selectedId: useTracksStore.getState().selectedId });
+    }
+  };
+  redoFnsRef.current.tracks = () => {
+    const state = useTracksStore.getState();
+    const snap = useUndoStore.getState().redo("tracks", () => ({
+      tracks: state.tracks.map((t) => ({ id: t.id, name: t.name })),
+    }));
+    if (snap) {
+      const s = snap as { tracks: { id: string; name: string }[] };
+      useTracksStore.setState({ tracks: s.tracks, selectedId: useTracksStore.getState().selectedId });
+    }
+  };
+
+  const handleUndo = useCallback(() => {
+    const ctx = useUndoStore.getState().focusedContext;
+    if (ctx) undoFnsRef.current[ctx]?.();
+  }, []);
+
+  const handleRedo = useCallback(() => {
+    const ctx = useUndoStore.getState().focusedContext;
+    if (ctx) redoFnsRef.current[ctx]?.();
+  }, []);
 
   // Keyboard shortcuts for undo/redo
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement).tagName === "INPUT" || (e.target as HTMLElement).tagName === "TEXTAREA") return;
       if (!(e.ctrlKey || e.metaKey)) return;
-      if (e.key === "z") { e.preventDefault(); undo(); }
-      if (e.key === "y") { e.preventDefault(); redo(); }
+      if (e.key === "z") { e.preventDefault(); handleUndo(); }
+      if (e.key === "y") { e.preventDefault(); handleRedo(); }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [undo, redo]);
+  }, [handleUndo, handleRedo]);
+
+  const mixerExec = useCallback((action: () => void) => {
+    const state = useMixerStore.getState();
+    useUndoStore.getState().executeAction("mixer", () => ({
+      channels: state.channels.map((ch) => ({ ...ch })),
+      masterVolume: state.masterVolume,
+    }));
+    action();
+  }, []);
+
+  const tracksExec = useCallback((action: () => void) => {
+    const state = useTracksStore.getState();
+    useUndoStore.getState().executeAction("tracks", () => ({
+      tracks: state.tracks.map((t) => ({ id: t.id, name: t.name })),
+    }));
+    action();
+  }, []);
 
   // Bridge metronome store → PolySynthOutput worklet
   const metronomeEnabled = useTransportStore((s) => s.metronomeEnabled);
@@ -357,7 +528,7 @@ function AppInner() {
   }, [transportState, setMeterLevel, setMasterMeterLevel]);
 
   const handleAddTrack = () => {
-    executeAction("Add Track", () => {
+    tracksExec(() => {
       const name = `Track ${tracks.length + 1}`;
       addTrack(name);
       const newTrack = useTracksStore.getState().tracks.at(-1);
@@ -366,24 +537,24 @@ function AppInner() {
   };
 
   const handleVolumeChange = useCallback((id: string, v: number) => {
-    executeAction("Set Volume", () => setVolume(id, v));
-  }, [executeAction, setVolume]);
+    mixerExec(() => setVolume(id, v));
+  }, [setVolume]);
 
   const handlePanChange = useCallback((id: string, v: number) => {
-    executeAction("Set Pan", () => setPan(id, v));
-  }, [executeAction, setPan]);
+    mixerExec(() => setPan(id, v));
+  }, [setPan]);
 
   const handleToggleMute = useCallback((id: string) => {
-    executeAction("Toggle Mute", () => toggleMute(id));
-  }, [executeAction, toggleMute]);
+    mixerExec(() => toggleMute(id));
+  }, [toggleMute]);
 
   const handleToggleSolo = useCallback((id: string) => {
-    executeAction("Toggle Solo", () => toggleSolo(id));
-  }, [executeAction, toggleSolo]);
+    mixerExec(() => toggleSolo(id));
+  }, [toggleSolo]);
 
   const handleSetMasterVolume = useCallback((v: number) => {
-    executeAction("Set Master Volume", () => setMasterVolume(v));
-  }, [executeAction, setMasterVolume]);
+    mixerExec(() => setMasterVolume(v));
+  }, [setMasterVolume]);
 
   const [delayEnabled, setDelayEnabled] = useState(false);
   const [reverbEnabled, setReverbEnabled] = useState(false);
@@ -420,7 +591,8 @@ function AppInner() {
     <div className="h-screen bg-[#2a2a2a] text-[#ccc] text-sm select-none flex flex-col overflow-hidden">
       <TopBar projectName={projectName} onSetName={setName}
         onSave={saveProjectFile} onLoad={loadProjectFile} onExport={handleExport}
-        onUndo={undo} onRedo={redo} />
+        onUndo={handleUndo} onRedo={handleRedo}
+        canUndo={cUndo} canRedo={cRedo} focusedContext={focusedContext} />
 
       {/* Content: Sidebar + Floating windows */}
       <div className="flex-1 flex overflow-hidden">
@@ -428,15 +600,15 @@ function AppInner() {
 
         {/* Floating windows layer */}
         <div className="flex-1 relative overflow-hidden">
-          <FloatingWindow id="timeline" sidebarWidth={sidebarWidth}>
-          <TimelineWindow />
+          <FloatingWindow id="timeline" sidebarWidth={sidebarWidth} onFocus={(id) => { const ctx = WINDOW_TO_CTX[id]; if (ctx) setFocusedContext(ctx); }}>
+          <TimelineWindow undoRefs={undoFnsRef} redoRefs={redoFnsRef} />
         </FloatingWindow>
 
-        <FloatingWindow id="piano-roll" sidebarWidth={sidebarWidth}>
-          <PianoRollWindow />
+        <FloatingWindow id="piano-roll" sidebarWidth={sidebarWidth} onFocus={(id) => { const ctx = WINDOW_TO_CTX[id]; if (ctx) setFocusedContext(ctx); }}>
+          <PianoRollWindow undoRefs={undoFnsRef} redoRefs={redoFnsRef} />
         </FloatingWindow>
 
-        <FloatingWindow id="mixer" sidebarWidth={sidebarWidth}>
+        <FloatingWindow id="mixer" sidebarWidth={sidebarWidth} onFocus={(id) => { const ctx = WINDOW_TO_CTX[id]; if (ctx) setFocusedContext(ctx); }}>
           <MixerPanel
             channels={channels}
             masterVolume={masterVolume}
@@ -453,7 +625,7 @@ function AppInner() {
           />
         </FloatingWindow>
 
-        <FloatingWindow id="tracks" sidebarWidth={sidebarWidth}>
+        <FloatingWindow id="tracks" sidebarWidth={sidebarWidth} onFocus={(id) => { const ctx = WINDOW_TO_CTX[id]; if (ctx) setFocusedContext(ctx); }}>
           <TrackList
             tracks={tracks}
             selectedId={selectedId}

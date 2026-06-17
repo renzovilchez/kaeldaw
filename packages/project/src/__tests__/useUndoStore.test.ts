@@ -5,197 +5,154 @@ import { useMixerStore } from "../useMixerStore";
 import { useClipsStore } from "../useClipsStore";
 import { useMidiStore } from "../useMidiStore";
 
+const CTX = "tracks";
+
 beforeEach(() => {
   useTracksStore.setState({ tracks: [], selectedId: null });
   useMixerStore.setState({ channels: [], masterVolume: 1, masterMeterLevel: 0 });
   useClipsStore.setState({ clips: [], nextId: 1, version: 0 });
   useMidiStore.setState({ clipId: null, notes: [], nextId: 1 });
   useUndoStore.getState().clearHistory();
+  useUndoStore.getState().setFocusedContext(CTX);
 });
 
+function canUndo() { return useUndoStore.getState().canUndo[CTX]; }
+function canRedo() { return useUndoStore.getState().canRedo[CTX]; }
+function exec(getSnapshot: () => { tracks: any[] }) {
+  useUndoStore.getState().executeAction(CTX, getSnapshot);
+}
+
 describe("useUndoStore", () => {
-  // ── Happy path ──
-
-  it("FEAT-052-02: Estado inicial canUndo=false, canRedo=false", () => {
-    const s = useUndoStore.getState();
-    expect(s.canUndo).toBe(false);
-    expect(s.canRedo).toBe(false);
+  it("Estado inicial canUndo=false, canRedo=false", () => {
+    expect(canUndo()).toBe(false);
+    expect(canRedo()).toBe(false);
   });
 
-  it("FEAT-052-03: executeAction actualiza canUndo a true", () => {
-    useUndoStore.getState().executeAction("test", () => {
-      useTracksStore.getState().addTrack("A");
-    });
-    expect(useUndoStore.getState().canUndo).toBe(true);
+  it("executeAction actualiza canUndo a true", () => {
+    exec(() => ({ tracks: [] }));
+    expect(canUndo()).toBe(true);
   });
 
-  it("FEAT-052-04: executeAction limpia redo stack", () => {
-    useUndoStore.getState().executeAction("a", () => {
-      useTracksStore.getState().addTrack("A");
-    });
-    useUndoStore.getState().undo();
-    expect(useUndoStore.getState().canRedo).toBe(true);
-    useUndoStore.getState().executeAction("b", () => {
-      useTracksStore.getState().addTrack("B");
-    });
-    expect(useUndoStore.getState().canRedo).toBe(false);
+  it("executeAction limpia redo stack", () => {
+    exec(() => ({ tracks: [{ id: "1", name: "A" }] }));
+    expect(useUndoStore.getState().undo(CTX, () => ({ tracks: [{ id: "1", name: "A" }] }))).toBeTruthy();
+    expect(canRedo()).toBe(true);
+    exec(() => ({ tracks: [{ id: "2", name: "B" }] }));
+    expect(canRedo()).toBe(false);
   });
 
-  it("FEAT-052-05: undo() restaura estado before, canRedo=true", () => {
-    useUndoStore.getState().executeAction("add track", () => {
-      useTracksStore.getState().addTrack("A");
-    });
-    expect(useTracksStore.getState().tracks).toHaveLength(1);
-    useUndoStore.getState().undo();
-    expect(useTracksStore.getState().tracks).toHaveLength(0);
-    expect(useUndoStore.getState().canRedo).toBe(true);
+  it("undo() restaura estado anterior via snapshot", () => {
+    exec(() => ({ tracks: [] }));
+    useTracksStore.getState().addTrack("A");
+    const snap = useUndoStore.getState().undo(CTX, () => ({
+      tracks: useTracksStore.getState().tracks.map((t) => ({ id: t.id, name: t.name })),
+    }));
+    expect(snap).toBeTruthy();
+    const s = snap as { tracks: { id: string; name: string }[] };
+    expect(s.tracks).toHaveLength(0);
+    expect(canRedo()).toBe(true);
   });
 
-  it("FEAT-052-06: redo() restaura estado after, canUndo=true", () => {
-    useUndoStore.getState().executeAction("add track", () => {
-      useTracksStore.getState().addTrack("A");
-    });
-    useUndoStore.getState().undo();
-    useUndoStore.getState().redo();
-    expect(useTracksStore.getState().tracks).toHaveLength(1);
-    expect(useUndoStore.getState().canUndo).toBe(true);
+  it("undo + redo restaura estado", () => {
+    exec(() => ({ tracks: [] }));
+    useTracksStore.getState().addTrack("A");
+    const snap1 = useUndoStore.getState().undo(CTX, () => ({
+      tracks: useTracksStore.getState().tracks.map((t) => ({ id: t.id, name: t.name })),
+    }));
+    expect((snap1 as any).tracks).toHaveLength(0);
+    const snap2 = useUndoStore.getState().redo(CTX, () => ({
+      tracks: useTracksStore.getState().tracks.map((t) => ({ id: t.id, name: t.name })),
+    }));
+    expect((snap2 as any).tracks).toHaveLength(1);
+    expect(canUndo()).toBe(true);
   });
 
-  it("FEAT-052-07: undo() sin historial no cambia estado", () => {
-    useUndoStore.getState().undo();
-    expect(useUndoStore.getState().canUndo).toBe(false);
-    expect(useUndoStore.getState().canRedo).toBe(false);
+  it("undo sin historial devuelve null", () => {
+    expect(useUndoStore.getState().undo(CTX, () => ({}))).toBeNull();
+    expect(canUndo()).toBe(false);
+    expect(canRedo()).toBe(false);
   });
 
-  it("FEAT-052-08: redo() sin historial no cambia estado", () => {
-    useUndoStore.getState().redo();
-    expect(useUndoStore.getState().canUndo).toBe(false);
-    expect(useUndoStore.getState().canRedo).toBe(false);
+  it("redo sin historial devuelve null", () => {
+    expect(useUndoStore.getState().redo(CTX, () => ({}))).toBeNull();
+    expect(canUndo()).toBe(false);
+    expect(canRedo()).toBe(false);
   });
 
-  // ── Cadena de acciones ──
-
-  it("FEAT-052-09: Dos executeActions + undo = deshace la segunda", () => {
-    useUndoStore.getState().executeAction("add A", () => {
-      useTracksStore.getState().addTrack("A");
-    });
-    useUndoStore.getState().executeAction("add B", () => {
-      useTracksStore.getState().addTrack("B");
-    });
+  it("Dos executeActions + undo deshace la segunda", () => {
+    exec(() => ({ tracks: [] }));
+    useTracksStore.getState().addTrack("A");
+    exec(() => ({ tracks: [{ id: "1", name: "A" }] }));
+    useTracksStore.getState().addTrack("B");
     expect(useTracksStore.getState().tracks).toHaveLength(2);
-    useUndoStore.getState().undo();
-    expect(useTracksStore.getState().tracks).toHaveLength(1);
-    expect(useTracksStore.getState().tracks[0].name).toBe("A");
+    const snap = useUndoStore.getState().undo(CTX, () => ({
+      tracks: useTracksStore.getState().tracks.map((t) => ({ id: t.id, name: t.name })),
+    }));
+    expect(snap).toBeTruthy();
+    expect((snap as any).tracks).toHaveLength(1);
+    expect((snap as any).tracks[0].name).toBe("A");
   });
 
-  it("FEAT-052-10: Dos executeActions + undo + redo = restaura la segunda", () => {
-    useUndoStore.getState().executeAction("add A", () => {
-      useTracksStore.getState().addTrack("A");
-    });
-    useUndoStore.getState().executeAction("add B", () => {
-      useTracksStore.getState().addTrack("B");
-    });
-    useUndoStore.getState().undo();
-    useUndoStore.getState().redo();
-    expect(useTracksStore.getState().tracks).toHaveLength(2);
+  it("Dos executeActions + undo + redo restaura la segunda", () => {
+    exec(() => ({ tracks: [] }));
+    useTracksStore.getState().addTrack("A");
+    exec(() => ({ tracks: [{ id: "1", name: "A" }] }));
+    useTracksStore.getState().addTrack("B");
+    useUndoStore.getState().undo(CTX, () => ({
+      tracks: useTracksStore.getState().tracks.map((t) => ({ id: t.id, name: t.name })),
+    }));
+    const snap = useUndoStore.getState().redo(CTX, () => ({
+      tracks: useTracksStore.getState().tracks.map((t) => ({ id: t.id, name: t.name })),
+    }));
+    expect((snap as any).tracks).toHaveLength(2);
   });
 
-  it("FEAT-052-11: Tres executeActions + undo + undo + redo = estado intermedio", () => {
-    useUndoStore.getState().executeAction("add A", () => {
-      useTracksStore.getState().addTrack("A");
-    });
-    useUndoStore.getState().executeAction("add B", () => {
-      useTracksStore.getState().addTrack("B");
-    });
-    useUndoStore.getState().executeAction("add C", () => {
-      useTracksStore.getState().addTrack("C");
-    });
-    useUndoStore.getState().undo();
-    useUndoStore.getState().undo();
-    expect(useTracksStore.getState().tracks).toHaveLength(1);
-    useUndoStore.getState().redo();
-    expect(useTracksStore.getState().tracks).toHaveLength(2);
+  it("redo sin undo previo no hace nada", () => {
+    expect(useUndoStore.getState().redo(CTX, () => ({}))).toBeNull();
   });
 
-  // ── Snapshot de stores ──
-
-  it("FEAT-052-12: executeAction captura tracks vacio → tracks con 1 track", () => {
-    useUndoStore.getState().executeAction("add track", () => {
-      useTracksStore.getState().addTrack("A");
-    });
-    expect(useTracksStore.getState().tracks).toHaveLength(1);
-    expect(useTracksStore.getState().tracks[0].name).toBe("A");
-  });
-
-  it("FEAT-052-13: undo() restaura tracks a vacio", () => {
-    useUndoStore.getState().executeAction("add track", () => {
-      useTracksStore.getState().addTrack("A");
-    });
-    useUndoStore.getState().undo();
-    expect(useTracksStore.getState().tracks).toHaveLength(0);
-  });
-
-  it("FEAT-052-14: executeAction captura masterVolume=1 → masterVolume=0.3", () => {
-    useUndoStore.getState().executeAction("set volume", () => {
-      useMixerStore.getState().setMasterVolume(0.3);
-    });
-    expect(useMixerStore.getState().masterVolume).toBe(0.3);
-  });
-
-  it("FEAT-052-15: undo() restaura masterVolume a 1", () => {
-    useUndoStore.getState().executeAction("set volume", () => {
-      useMixerStore.getState().setMasterVolume(0.3);
-    });
-    useUndoStore.getState().undo();
-    expect(useMixerStore.getState().masterVolume).toBe(1);
-  });
-
-  // ── Max history ──
-
-  it("FEAT-052-16: 51 executeActions no crashea", () => {
-    for (let i = 0; i < 51; i++) {
-      useUndoStore.getState().executeAction(`action ${i}`, () => {
-        useTracksStore.getState().addTrack(`Track ${i}`);
-      });
+  it("Pila maxima 50", () => {
+    for (let i = 0; i < 55; i++) {
+      exec(() => ({ tracks: [{ id: String(i), name: `Track ${i}` }] }));
     }
-    expect(useTracksStore.getState().tracks).toHaveLength(51);
-    expect(useUndoStore.getState().canUndo).toBe(true);
+    // verify oldest was pushed out (only 50 remain)
+    let count = 0;
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const snap = useUndoStore.getState().undo(CTX, () => ({ tracks: [] }));
+      if (!snap) break;
+      count++;
+    }
+    expect(count).toBe(50);
   });
 
-  // ── Redo se pierde ──
-
-  it("FEAT-052-18: undo() + executeAction nuevo → redo se pierde", () => {
-    useUndoStore.getState().executeAction("add A", () => {
-      useTracksStore.getState().addTrack("A");
-    });
-    useUndoStore.getState().undo();
-    expect(useUndoStore.getState().canRedo).toBe(true);
-    useUndoStore.getState().executeAction("add B", () => {
-      useTracksStore.getState().addTrack("B");
-    });
-    expect(useUndoStore.getState().canRedo).toBe(false);
+  it("undo + executeAction nuevo → redo se pierde", () => {
+    exec(() => ({ tracks: [] }));
+    useTracksStore.getState().addTrack("A");
+    useUndoStore.getState().undo(CTX, () => ({
+      tracks: useTracksStore.getState().tracks.map((t) => ({ id: t.id, name: t.name })),
+    }));
+    expect(canRedo()).toBe(true);
+    exec(() => ({ tracks: [{ id: "1", name: "A" }] }));
+    expect(canRedo()).toBe(false);
   });
 
-  // ── Clips en snapshot ──
-
-  it("executeAction con clips se restaura correctamente", () => {
-    useUndoStore.getState().executeAction("add clip", () => {
-      useClipsStore.getState().addClip({
-        trackId: "t1", trackIndex: 0, startTick: 0, durationTicks: 96,
-        color: "#22d3ee", name: "Clip",
-      });
-    });
-    expect(useClipsStore.getState().clips).toHaveLength(1);
-    useUndoStore.getState().undo();
-    expect(useClipsStore.getState().clips).toHaveLength(0);
-  });
-
-  it("executeAction con mixer channels se restaura correctamente", () => {
-    useUndoStore.getState().executeAction("add channel", () => {
-      useMixerStore.getState().addChannel("Kick", "t1");
-    });
-    expect(useMixerStore.getState().channels).toHaveLength(1);
-    useUndoStore.getState().undo();
-    expect(useMixerStore.getState().channels).toHaveLength(0);
+  it("contextos separados no interfieren", () => {
+    exec(() => ({ tracks: [] }));
+    useTracksStore.getState().addTrack("A");
+    useUndoStore.getState().executeAction("mixer", () => ({
+      channels: useMixerStore.getState().channels,
+      masterVolume: useMixerStore.getState().masterVolume,
+    }));
+    useMixerStore.getState().setMasterVolume(0.5);
+    useUndoStore.getState().setFocusedContext("mixer");
+    expect(useUndoStore.getState().canUndo.mixer).toBe(true);
+    const snap = useUndoStore.getState().undo("mixer", () => ({
+      channels: useMixerStore.getState().channels.map((c) => ({ ...c })),
+      masterVolume: useMixerStore.getState().masterVolume,
+    }));
+    expect((snap as any).masterVolume).toBe(1);
+    useUndoStore.getState().setFocusedContext(CTX);
+    expect(canUndo()).toBe(true);
   });
 });

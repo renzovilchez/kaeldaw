@@ -373,6 +373,9 @@ export class PianoRoll extends HTMLElement {
 
     const existing = this._findNoteAt(e.clientX, e.clientY);
     if (existing) {
+      this.dispatchEvent(new CustomEvent("before-note-action", {
+        detail: JSON.parse(JSON.stringify({ notes: this._notes })),
+      }));
       this._selectedNoteId = existing.id;
       const isResize = this._isOnResizeHandle(e.clientX, existing);
       this._dragState = {
@@ -385,10 +388,12 @@ export class PianoRoll extends HTMLElement {
         origDurationTicks: existing.durationTicks,
       };
     } else {
-      // Create new note on click
       const tick = this._snapTick(Math.max(0, Math.round(this._tickFromX(e.clientX))));
       const note = this._noteFromY(e.clientY);
       if (tick >= 0) {
+        this.dispatchEvent(new CustomEvent("before-note-action", {
+          detail: JSON.parse(JSON.stringify({ notes: this._notes })),
+        }));
         const id = this.addNote(note, tick, this._snapUnit * 4);
         this._selectedNoteId = id;
         this._dragState = {
@@ -455,6 +460,9 @@ export class PianoRoll extends HTMLElement {
   private _handleKeyDown(e: KeyboardEvent) {
     if (e.key === "Delete" || e.key === "Backspace") {
       if (this._selectedNoteId !== null) {
+        this.dispatchEvent(new CustomEvent("before-note-action", {
+          detail: JSON.parse(JSON.stringify({ notes: this._notes })),
+        }));
         const id = this._selectedNoteId;
         this.removeNote(id);
         this.dispatchEvent(new CustomEvent("note-delete", { detail: { noteId: id } }));

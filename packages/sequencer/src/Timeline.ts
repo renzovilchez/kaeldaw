@@ -394,6 +394,9 @@ export class Timeline extends HTMLElement {
     if (target !== this._canvas) return;
     const clip = this._findClipAt(e.clientX, e.clientY);
     if (clip) {
+      this.dispatchEvent(new CustomEvent("before-clip-action", {
+        detail: JSON.parse(JSON.stringify({ clips: this._clips, nextId: this._nextClipId })),
+      }));
       this._selectedClipId = clip.id;
       this.dispatchEvent(new CustomEvent("clip-select", { detail: { clipId: clip.id } }));
       const isResize = this._isOnResizeHandle(e.clientX, clip);
@@ -485,6 +488,9 @@ export class Timeline extends HTMLElement {
   private _handleKeyDown(e: KeyboardEvent) {
     if (e.key === "Delete" || e.key === "Backspace") {
       if (this._selectedClipId !== null) {
+        this.dispatchEvent(new CustomEvent("before-clip-action", {
+          detail: JSON.parse(JSON.stringify({ clips: this._clips, nextId: this._nextClipId })),
+        }));
         const id = this._selectedClipId;
         this.removeClip(id);
         this.dispatchEvent(new CustomEvent("clip-delete", { detail: { clipId: id } }));

@@ -1,91 +1,93 @@
 import { create } from "zustand";
-import { UndoRedoManager, type Command } from "./CommandHistory";
-import { useTracksStore } from "./useTracksStore";
-import { useMixerStore } from "./useMixerStore";
-import { useClipsStore } from "./useClipsStore";
-import { useMidiStore } from "./useMidiStore";
 
-interface ProjectSnapshot {
-  tracks: { id: string; name: string }[];
-  channels: { id: string; name: string; volume: number; pan: number; mute: boolean; solo: boolean; meterLevel: number }[];
-  masterVolume: number;
-  clips: { id: number; trackIndex: number; trackId: string; startTick: number; durationTicks: number; color: string; name: string; notes: { id: number; note: number; startTick: number; durationTicks: number; velocity: number; color?: string }[] }[];
+export type UndoContext = "timeline" | "pianoRoll" | "mixer" | "tracks";
+
+const MAX_HISTORY = 50;
+
+function makeFlags(): Record<UndoContext, boolean> {
+  return { timeline: false, pianoRoll: false, mixer: false, tracks: false };
 }
 
-function takeSnapshot(): ProjectSnapshot {
-  return {
-    tracks: useTracksStore.getState().tracks.map((t) => ({ id: t.id, name: t.name })),
-    channels: useMixerStore.getState().channels.map((ch) => ({
-      id: ch.id, name: ch.name, volume: ch.volume, pan: ch.pan, mute: ch.mute, solo: ch.solo, meterLevel: ch.meterLevel,
-    })),
-    masterVolume: useMixerStore.getState().masterVolume,
-    clips: useClipsStore.getState().clips.map((c) => ({
-      id: c.id, trackIndex: c.trackIndex, trackId: c.trackId,
-      startTick: c.startTick, durationTicks: c.durationTicks, color: c.color, name: c.name,
-      notes: c.notes.map((n) => ({ ...n })),
-    })),
-  };
-}
+const STORAGE_KEY = "kaeldaw-undo-context";
 
-function restoreSnapshot(snap: ProjectSnapshot): void {
-  useTracksStore.setState({ tracks: snap.tracks, selectedId: useTracksStore.getState().selectedId });
-  useMixerStore.setState({ channels: snap.channels, masterVolume: snap.masterVolume });
-  useClipsStore.getState().setClips(snap.clips);
-  useMidiStore.getState().clear();
-}
-
-class SnapshotCommand implements Command {
-  readonly name: string;
-  #before: ProjectSnapshot;
-  #after: ProjectSnapshot;
-
-  constructor(name: string, before: ProjectSnapshot, after: ProjectSnapshot) {
-    this.name = name;
-    this.#before = before;
-    this.#after = after;
-  }
-
-  execute(): void { restoreSnapshot(this.#after); }
-  undo(): void { restoreSnapshot(this.#before); }
+function loadPersistedContext(): UndoContext | null {
+  if (typeof window === "undefined") return null;
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved === "timeline" || saved === "pianoRoll" || saved === "mixer" || saved === "tracks") return saved;
+  return null;
 }
 
 export interface UndoStore {
-  canUndo: boolean;
-  canRedo: boolean;
-  undo: () => void;
-  redo: () => void;
-  executeAction: (name: string, action: () => void) => void;
+  focusedContext: UndoContext | null;
+  canUndo: Record<UndoContext, boolean>;
+  canRedo: Record<UndoContext, boolean>;
+  setFocusedContext: (ctx: UndoContext) => void;
+  executeAction: (context: UndoContext, getSnapshot: () => unknown) => void;
+  undo: (context: UndoContext, getCurrentState: () => unknown) => unknown | null;
+  redo: (context: UndoContext, getCurrentState: () => unknown) => unknown | null;
   clearHistory: () => void;
 }
 
-const manager = new UndoRedoManager(50);
+const history: Record<UndoContext, unknown[]> = { timeline: [], pianoRoll: [], mixer: [], tracks: [] };
+const redoStack: Record<UndoContext, unknown[]> = { timeline: [], pianoRoll: [], mixer: [], tracks: [] };
+
+function updateFlags(set: (s: Partial<UndoStore>) => void) {
+  set({
+    canUndo: {
+      timeline: history.timeline.length > 0,
+      pianoRoll: history.pianoRoll.length > 0,
+      mixer: history.mixer.length > 0,
+      tracks: history.tracks.length > 0,
+    },
+    canRedo: {
+      timeline: redoStack.timeline.length > 0,
+      pianoRoll: redoStack.pianoRoll.length > 0,
+      mixer: redoStack.mixer.length > 0,
+      tracks: redoStack.tracks.length > 0,
+    },
+  });
+}
 
 export const useUndoStore = create<UndoStore>((set) => ({
-  canUndo: false,
-  canRedo: false,
+  focusedContext: loadPersistedContext(),
+  canUndo: makeFlags(),
+  canRedo: makeFlags(),
 
-  undo: () => {
-    if (manager.undo()) {
-      set({ canUndo: manager.canUndo, canRedo: manager.canRedo });
-    }
+  setFocusedContext: (ctx) => {
+    localStorage.setItem(STORAGE_KEY, ctx);
+    set({ focusedContext: ctx });
   },
 
-  redo: () => {
-    if (manager.redo()) {
-      set({ canUndo: manager.canUndo, canRedo: manager.canRedo });
-    }
+  executeAction: (context, getSnapshot) => {
+    history[context].push(getSnapshot());
+    if (history[context].length > MAX_HISTORY) history[context].shift();
+    redoStack[context] = [];
+    updateFlags(set);
   },
 
-  executeAction: (name, action) => {
-    const before = takeSnapshot();
-    action();
-    const after = takeSnapshot();
-    manager.execute(new SnapshotCommand(name, before, after));
-    set({ canUndo: manager.canUndo, canRedo: manager.canRedo });
+  undo: (context, getCurrentState) => {
+    const stack = history[context];
+    if (stack.length === 0) return null;
+    const snapshot = stack.pop()!;
+    redoStack[context].push(getCurrentState());
+    updateFlags(set);
+    return snapshot;
+  },
+
+  redo: (context, getCurrentState) => {
+    const stack = redoStack[context];
+    if (stack.length === 0) return null;
+    const snapshot = stack.pop()!;
+    history[context].push(getCurrentState());
+    updateFlags(set);
+    return snapshot;
   },
 
   clearHistory: () => {
-    manager.clear();
-    set({ canUndo: false, canRedo: false });
+    for (const ctx of Object.keys(history) as UndoContext[]) {
+      history[ctx] = [];
+      redoStack[ctx] = [];
+    }
+    updateFlags(set);
   },
 }));

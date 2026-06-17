@@ -5,9 +5,10 @@ type Props = {
   id: WindowId;
   children: ReactNode;
   sidebarWidth?: number;
+  onFocus?: (id: WindowId) => void;
 };
 
-export function FloatingWindow({ id, children, sidebarWidth = 0 }: Props) {
+export function FloatingWindow({ id, children, sidebarWidth = 0, onFocus }: Props) {
   const { state, close, toggleMaximize, toggleMinimize, bringToFront, move, resize } = useWindowManager();
   const w = state.windows[id];
   const [isResizing, setIsResizing] = useState(false);
@@ -93,7 +94,7 @@ export function FloatingWindow({ id, children, sidebarWidth = 0 }: Props) {
     <div
       style={style}
       className="bg-[#3a3a3a] rounded-[4px] shadow-[0_4px_12px_rgba(0,0,0,0.3)] overflow-hidden"
-      onMouseDown={() => bringToFront(id)}
+      onMouseDown={() => { bringToFront(id); onFocus?.(id); }}
     >
       <div
         ref={titleRef}

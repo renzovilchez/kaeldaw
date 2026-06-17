@@ -27,6 +27,13 @@ function formatPosition(
   return `${String(bar).padStart(3, "0")}:${String(beat).padStart(2, "0")}:${String(tick).padStart(3, "0")}`;
 }
 
+const CONTEXT_LABEL: Record<string, string> = {
+  timeline: "Timeline",
+  pianoRoll: "Piano Roll",
+  mixer: "Mixer",
+  tracks: "Tracks",
+};
+
 export function TopBar({
   projectName,
   onSetName,
@@ -35,6 +42,9 @@ export function TopBar({
   onExport,
   onUndo,
   onRedo,
+  canUndo,
+  canRedo,
+  focusedContext,
 }: {
   projectName: string;
   onSetName: (name: string) => void;
@@ -43,6 +53,9 @@ export function TopBar({
   onExport: () => void;
   onUndo: () => void;
   onRedo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
+  focusedContext: string | null;
 }) {
   const { state, toggle } = useWindowManager();
   const bpm = useTransportStore((s) => s.bpm);
@@ -200,18 +213,26 @@ export function TopBar({
       <input ref={fileRef} type="file" accept=".kaeldaw" className="hidden" onChange={handleFileChange} />
       <div className="h-4 w-px bg-[#555]" />
       <button
-        className="px-2 py-1 rounded text-[10px] bg-[#4a4a4a] hover:bg-[#555] text-white transition-colors"
-        onClick={onUndo}
-        title="Undo (Ctrl+Z)"
+        className={`px-2 py-1 rounded text-[10px] transition-colors ${
+          canUndo
+            ? "bg-[#4a4a4a] hover:bg-[#555] text-white"
+            : "bg-[#333] text-[#555] cursor-default"
+        }`}
+        onClick={canUndo ? onUndo : undefined}
+        title={focusedContext ? `Undo ${CONTEXT_LABEL[focusedContext]} (Ctrl+Z)` : "Undo (Ctrl+Z)"}
       >
-        ↩ Undo
+        ↩{focusedContext ? ` ${CONTEXT_LABEL[focusedContext]}` : ""}
       </button>
       <button
-        className="px-2 py-1 rounded text-[10px] bg-[#4a4a4a] hover:bg-[#555] text-white transition-colors"
-        onClick={onRedo}
-        title="Redo (Ctrl+Shift+Z)"
+        className={`px-2 py-1 rounded text-[10px] transition-colors ${
+          canRedo
+            ? "bg-[#4a4a4a] hover:bg-[#555] text-white"
+            : "bg-[#333] text-[#555] cursor-default"
+        }`}
+        onClick={canRedo ? onRedo : undefined}
+        title={focusedContext ? `Redo ${CONTEXT_LABEL[focusedContext]} (Ctrl+Y)` : "Redo (Ctrl+Y)"}
       >
-        ↪ Redo
+        ↪{focusedContext ? ` ${CONTEXT_LABEL[focusedContext]}` : ""}
       </button>
       <button
         className="px-2 py-1 rounded text-[10px] bg-[#3b82f6] hover:bg-[#2563eb] text-white transition-colors"
