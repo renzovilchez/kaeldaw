@@ -30,7 +30,7 @@ function TimelineWindow() {
   const moveClip = useClipsStore((s) => s.moveClip);
   const resizeClip = useClipsStore((s) => s.resizeClip);
   const removeClip = useClipsStore((s) => s.removeClip);
-  const { toggle } = useWindowManager();
+  const { open } = useWindowManager();
   const elRef = useRef<HTMLElement>(null);
 
   const tracksRef = useRef(tracks);
@@ -112,7 +112,7 @@ function TimelineWindow() {
     };
 
     const onClipDblClick = (_: Event) => {
-      toggle("piano-roll");
+      open("piano-roll");
     };
 
     el.addEventListener("timeline-click", onTimelineClick);
