@@ -40,6 +40,7 @@ const TimelineWindow = memo(function TimelineWindow({ undoRefs, redoRefs }: { un
   const addClip = useClipsStore((s) => s.addClip);
   const moveClip = useClipsStore((s) => s.moveClip);
   const resizeClip = useClipsStore((s) => s.resizeClip);
+  const trimClip = useClipsStore((s) => s.trimClip);
   const removeClip = useClipsStore((s) => s.removeClip);
   const { open } = useWindowManager();
   const elRef = useRef<HTMLElement>(null);
@@ -66,14 +67,15 @@ const TimelineWindow = memo(function TimelineWindow({ undoRefs, redoRefs }: { un
     wc.clearClips();
     let maxId = 0;
     for (const clip of clips) {
-      wc.addClip(clip.trackIndex, clip.startTick, clip.durationTicks, clip.color, clip.name, clip.id);
+      const notes = clip.notes.map((n) => ({ note: n.note, startTick: n.startTick, durationTicks: n.durationTicks }));
+      wc.addClip(clip.trackIndex, clip.startTick, clip.durationTicks, clip.color, clip.name, clip.id, notes, clip.startOffset);
       if (clip.id > maxId) maxId = clip.id;
     }
     (wc as any)._nextClipId = maxId + 1;
   }, [version]);
 
-  const handlersRef = useRef({ addClip, moveClip, resizeClip, removeClip });
-  useEffect(() => { handlersRef.current = { addClip, moveClip, resizeClip, removeClip }; }, [addClip, moveClip, resizeClip, removeClip]);
+  const handlersRef = useRef({ addClip, moveClip, resizeClip, trimClip, removeClip });
+  useEffect(() => { handlersRef.current = { addClip, moveClip, resizeClip, trimClip, removeClip }; }, [addClip, moveClip, resizeClip, trimClip, removeClip]);
 
   // Register undo/redo for this context
   useEffect(() => {
@@ -91,7 +93,10 @@ const TimelineWindow = memo(function TimelineWindow({ undoRefs, redoRefs }: { un
       const s = snap as { clips: any[]; nextId: number };
       console.log("UNDO TIMELINE: restoring snapshot clips:", JSON.stringify(s.clips.map(c => ({ id: c.id, pos: c.startTick }))));
       wc.clearClips();
-      for (const clip of s.clips) wc.addClip(clip.trackIndex, clip.startTick, clip.durationTicks, clip.color, clip.name);
+      for (const clip of s.clips) {
+        const notes = (clip.notes || []).map((n: any) => ({ note: n.note, startTick: n.startTick, durationTicks: n.durationTicks }));
+        wc.addClip(clip.trackIndex, clip.startTick, clip.durationTicks, clip.color, clip.name, undefined, notes, clip.startOffset ?? 0);
+      }
       (wc as any)._nextClipId = s.nextId;
       const after = wc.getClips().map((c: any) => ({ id: c.id, pos: c.startTick }));
       console.log("UNDO TIMELINE: WC clips after restore:", JSON.stringify(after));
@@ -106,7 +111,10 @@ const TimelineWindow = memo(function TimelineWindow({ undoRefs, redoRefs }: { un
       if (!snap) return;
       const s = snap as { clips: any[]; nextId: number };
       wc.clearClips();
-      for (const clip of s.clips) wc.addClip(clip.trackIndex, clip.startTick, clip.durationTicks, clip.color, clip.name);
+      for (const clip of s.clips) {
+        const notes = (clip.notes || []).map((n: any) => ({ note: n.note, startTick: n.startTick, durationTicks: n.durationTicks }));
+        wc.addClip(clip.trackIndex, clip.startTick, clip.durationTicks, clip.color, clip.name, undefined, notes, clip.startOffset ?? 0);
+      }
       (wc as any)._nextClipId = s.nextId;
     };
     return () => { undoRefs.current.timeline = null; redoRefs.current.timeline = null; };
@@ -140,8 +148,8 @@ const TimelineWindow = memo(function TimelineWindow({ undoRefs, redoRefs }: { un
         clips: wc.getClips(),
         nextId: (wc as any)._nextClipId,
       }));
-      const wcId = wc.addClip(d.trackIndex, d.tick, 96, "#22d3ee", "Clip");
-      handlersRef.current.addClip({ trackId, trackIndex: d.trackIndex, startTick: d.tick, durationTicks: 96, color: "#22d3ee", name: "Clip", notes: [] }, wcId);
+      const wcId = wc.addClip(d.trackIndex, d.tick, 96, "#22d3ee", "Clip", undefined, [], 0);
+      handlersRef.current.addClip({ trackId, trackIndex: d.trackIndex, startTick: d.tick, durationTicks: 96, color: "#22d3ee", name: "Clip", notes: [], startOffset: 0 }, wcId);
     };
 
     const onBeforeClipAction = (e: Event) => {
@@ -158,6 +166,11 @@ const TimelineWindow = memo(function TimelineWindow({ undoRefs, redoRefs }: { un
     const onClipResize = (e: Event) => {
       const d = (e as CustomEvent).detail;
       handlersRef.current.resizeClip(d.clipId, d.startTick, d.durationTicks);
+    };
+
+    const onClipTrim = (e: Event) => {
+      const d = (e as CustomEvent).detail;
+      handlersRef.current.trimClip(d.clipId, d.startOffset, d.durationTicks);
     };
 
     const onClipDelete = (e: Event) => {
@@ -177,6 +190,7 @@ const TimelineWindow = memo(function TimelineWindow({ undoRefs, redoRefs }: { un
     el.addEventListener("timeline-click", onTimelineClick);
     el.addEventListener("clip-move", onClipMove);
     el.addEventListener("clip-resize", onClipResize);
+    el.addEventListener("clip-trim", onClipTrim);
     el.addEventListener("clip-delete", onClipDelete);
     el.addEventListener("clip-select", onClipSelect);
     el.addEventListener("clip-dblclick", onClipDblClick);
@@ -185,6 +199,7 @@ const TimelineWindow = memo(function TimelineWindow({ undoRefs, redoRefs }: { un
       el.removeEventListener("timeline-click", onTimelineClick);
       el.removeEventListener("clip-move", onClipMove);
       el.removeEventListener("clip-resize", onClipResize);
+      el.removeEventListener("clip-trim", onClipTrim);
       el.removeEventListener("clip-delete", onClipDelete);
       el.removeEventListener("clip-select", onClipSelect);
       el.removeEventListener("clip-dblclick", onClipDblClick);
@@ -501,9 +516,18 @@ function AppInner() {
         const clips = useClipsStore.getState().clips;
         const events: { tick: number; type: string; note: number; velocity: number }[] = [];
         for (const clip of clips) {
+          const offset = clip.startOffset ?? 0;
+          const clipStart = clip.startTick;
+          const clipEnd = clip.startTick + clip.durationTicks;
           for (const n of clip.notes) {
-            events.push({ tick: (clip.startTick + n.startTick) * VISUAL_TO_PPQN, type: "on", note: n.note, velocity: n.velocity });
-            events.push({ tick: (clip.startTick + n.startTick + n.durationTicks) * VISUAL_TO_PPQN, type: "off", note: n.note, velocity: 0 });
+            const noteAbsStart = clipStart + n.startTick - offset;
+            const noteAbsEnd = noteAbsStart + n.durationTicks;
+            const clampedStart = Math.max(clipStart, noteAbsStart);
+            const clampedEnd = Math.min(clipEnd, noteAbsEnd);
+            if (clampedStart < clampedEnd) {
+              events.push({ tick: clampedStart * VISUAL_TO_PPQN, type: "on", note: n.note, velocity: n.velocity });
+              events.push({ tick: clampedEnd * VISUAL_TO_PPQN, type: "off", note: n.note, velocity: 0 });
+            }
           }
         }
 

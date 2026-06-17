@@ -9,6 +9,7 @@ export interface ClipData {
   color: string;
   name: string;
   notes: MidiNoteData[];
+  startOffset: number;
 }
 
 export interface MidiNoteData {
@@ -25,9 +26,10 @@ export interface ClipsStore {
   nextId: number;
   version: number;
   setClips: (clips: ClipData[]) => void;
-  addClip: (clip: Omit<ClipData, "id" | "notes"> & { notes?: MidiNoteData[] }, externalId?: number) => number;
+  addClip: (clip: Omit<ClipData, "id" | "notes" | "startOffset"> & { notes?: MidiNoteData[]; startOffset?: number }, externalId?: number) => number;
   moveClip: (id: number, startTick: number, trackIndex: number, trackId?: string) => void;
   resizeClip: (id: number, startTick: number, durationTicks: number) => void;
+  trimClip: (id: number, startOffset: number, durationTicks: number) => void;
   removeClip: (id: number) => void;
   setClipNotes: (clipId: number, notes: MidiNoteData[]) => void;
   getClipsForTrack: (trackIndex: number) => ClipData[];
@@ -42,7 +44,7 @@ export const useClipsStore = create<ClipsStore>((set, get) => ({
 
   addClip: (clip, externalId) => {
     const id = externalId ?? get().nextId;
-    set((s) => ({ clips: [...s.clips, { ...clip, id, notes: clip.notes ?? [] }], nextId: Math.max(get().nextId, id + 1) }));
+    set((s) => ({ clips: [...s.clips, { ...clip, id, notes: clip.notes ?? [], startOffset: clip.startOffset ?? 0 }], nextId: Math.max(get().nextId, id + 1) }));
     return id;
   },
 
@@ -57,6 +59,13 @@ export const useClipsStore = create<ClipsStore>((set, get) => ({
     set((s) => ({
       clips: s.clips.map((c) =>
         c.id === id ? { ...c, startTick, durationTicks } : c,
+      ),
+    })),
+
+  trimClip: (id, startOffset, durationTicks) =>
+    set((s) => ({
+      clips: s.clips.map((c) =>
+        c.id === id ? { ...c, startOffset, durationTicks } : c,
       ),
     })),
 

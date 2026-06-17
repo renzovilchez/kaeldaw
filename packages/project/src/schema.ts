@@ -30,6 +30,7 @@ export interface ProjectClip {
   color: string;
   name: string;
   notes: { id: number; note: number; startTick: number; durationTicks: number; velocity: number; color?: string }[];
+  startOffset?: number;
 }
 
 export interface ProjectMidiNote {

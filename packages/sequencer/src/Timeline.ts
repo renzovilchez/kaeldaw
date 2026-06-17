@@ -7,6 +7,12 @@ const MAX_PIXELS_PER_BEAT = 200;
 const DEFAULT_PPB = 40;
 const SNAP_BEAT = 1;
 
+export type ClipNoteData = {
+  note: number;
+  startTick: number;
+  durationTicks: number;
+};
+
 export type ClipData = {
   id: number;
   trackIndex: number;
@@ -14,6 +20,8 @@ export type ClipData = {
   durationTicks: number;
   color: string;
   name: string;
+  notes?: ClipNoteData[];
+  startOffset?: number;
 };
 
 export class Timeline extends HTMLElement {
@@ -29,13 +37,14 @@ export class Timeline extends HTMLElement {
   private _totalDurationTicks = 3840;
 
   private _dragState: {
-    type: "move" | "resize" | null;
+    type: "move" | "resize" | "trim-left" | null;
     clipId: number;
     startMouseX: number;
     startMouseY: number;
     origStartTick: number;
     origDurationTicks: number;
     origTrackIndex: number;
+    origStartOffset: number;
   } | null = null;
 
   private _selectedClipId: number | null = null;
@@ -187,10 +196,10 @@ export class Timeline extends HTMLElement {
     this.scrollX = position;
   }
 
-  addClip(trackIndex: number, startTick: number, durationTicks: number, color = "#22d3ee", name = "", externalId?: number): number {
+  addClip(trackIndex: number, startTick: number, durationTicks: number, color = "#22d3ee", name = "", externalId?: number, notes?: ClipNoteData[], startOffset = 0): number {
     const id = externalId ?? this._nextClipId++;
     if (externalId !== undefined) this._nextClipId = Math.max(this._nextClipId, externalId + 1);
-    this._clips.push({ id, trackIndex, startTick, durationTicks, color, name: name || `Clip ${id}` });
+    this._clips.push({ id, trackIndex, startTick, durationTicks, color, name: name || `Clip ${id}`, notes, startOffset });
     return id;
   }
 
@@ -333,12 +342,44 @@ export class Timeline extends HTMLElement {
       ctx.roundRect(cX, cY, cW, cH, 4);
       ctx.stroke();
 
-    ctx.fillStyle = "#ccc";
+      ctx.fillStyle = "#ccc";
       ctx.font = "11px sans-serif";
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
-      const label = clip.name.length > Math.floor(cW / 7) ? clip.name.slice(0, Math.floor(cW / 7) - 1) + "…" : clip.name;
-      ctx.fillText(label, cX + 4, cY + cH / 2);
+      if (!clip.notes || clip.notes.length === 0) {
+        const label = clip.name.length > Math.floor(cW / 7) ? clip.name.slice(0, Math.floor(cW / 7) - 1) + "…" : clip.name;
+        ctx.fillText(label, cX + 4, cY + cH / 2);
+      }
+
+      // Note preview
+      if (clip.notes && clip.notes.length > 0 && cW > 16) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(cX, cY, cW, cH);
+        ctx.clip();
+        const NOTE_MIN = 24;
+        const NOTE_MAX = 96;
+        const noteRange = NOTE_MAX - NOTE_MIN;
+        const padY = Math.round(cH * 0.2);
+        const innerH = cH - padY * 2;
+        const previewTop = cY + padY;
+        const offset = clip.startOffset ?? 0;
+        const visibleEnd = offset + clip.durationTicks;
+        ctx.fillStyle = "#d1d5db";
+        for (const n of clip.notes) {
+          if (n.startTick >= visibleEnd) continue;
+          if (n.startTick + n.durationTicks <= offset) continue;
+          const noteRelTick = Math.max(0, n.startTick - offset);
+          const noteRelEnd = Math.min(visibleEnd, n.startTick + n.durationTicks) - offset;
+          if (noteRelEnd <= 0) continue;
+          const nx = cX + ticksToPx(noteRelTick, this.pixelsPerTick);
+          const nw = Math.max(2, ticksToPx(noteRelEnd - noteRelTick, this.pixelsPerTick) - 1);
+          const ny = previewTop + (NOTE_MAX - n.note) / noteRange * innerH;
+          const nh = Math.max(2, innerH / noteRange * 4);
+          ctx.fillRect(nx, ny, nw, nh);
+        }
+        ctx.restore();
+      }
 
       if (cW > 16) {
         ctx.fillStyle = clip.color + "88";
@@ -390,6 +431,13 @@ export class Timeline extends HTMLElement {
     return Math.abs(canvasX - clipEndX) <= 5;
   }
 
+  private _isOnLeftTrimHandle(clientX: number, clip: ClipData): boolean {
+    const rect = this._canvas!.getBoundingClientRect();
+    const canvasX = clientX - rect.left;
+    const clipStartX = ticksToPx(clip.startTick, this.pixelsPerTick) - this._scrollX;
+    return Math.abs(canvasX - clipStartX) <= 5;
+  }
+
   private _handleMouseDown(e: MouseEvent) {
     const target = e.target as HTMLElement;
     if (target !== this._canvas) return;
@@ -401,14 +449,16 @@ export class Timeline extends HTMLElement {
       this._selectedClipId = clip.id;
       this.dispatchEvent(new CustomEvent("clip-select", { detail: { clipId: clip.id } }));
       const isResize = this._isOnResizeHandle(e.clientX, clip);
+      const isTrimLeft = !isResize && this._isOnLeftTrimHandle(e.clientX, clip);
       this._dragState = {
-        type: isResize ? "resize" : "move",
+        type: isResize ? "resize" : isTrimLeft ? "trim-left" : "move",
         clipId: clip.id,
         startMouseX: e.clientX,
         startMouseY: e.clientY,
         origStartTick: clip.startTick,
         origDurationTicks: clip.durationTicks,
         origTrackIndex: clip.trackIndex,
+        origStartOffset: clip.startOffset ?? 0,
       };
       e.preventDefault();
     } else {
@@ -424,10 +474,12 @@ export class Timeline extends HTMLElement {
   private _handleMouseMove(e: MouseEvent) {
     if (!this._dragState) {
       const clip = this._findClipAt(e.clientX, e.clientY);
-      if (clip && this._isOnResizeHandle(e.clientX, clip)) {
-        this._canvas!.style.cursor = "ew-resize";
-      } else if (clip) {
-        this._canvas!.style.cursor = "grab";
+      if (clip) {
+        if (this._isOnResizeHandle(e.clientX, clip) || this._isOnLeftTrimHandle(e.clientX, clip)) {
+          this._canvas!.style.cursor = "ew-resize";
+        } else {
+          this._canvas!.style.cursor = "grab";
+        }
       } else {
         this._canvas!.style.cursor = "default";
       }
@@ -451,6 +503,16 @@ export class Timeline extends HTMLElement {
         const rawDuration = drag.origDurationTicks + dxTick;
         clip.durationTicks = Math.max(24, this._snapTick(rawDuration));
       }
+    } else if (drag.type === "trim-left") {
+      const dxTick = this._tickFromX(e.clientX) - this._tickFromX(drag.startMouseX);
+      const clip = this._clips.find((c) => c.id === drag.clipId);
+      if (clip) {
+        const rawOffset = drag.origStartOffset + dxTick;
+        clip.startOffset = Math.max(0, this._snapTick(rawOffset));
+        const adjustedDx = clip.startOffset - drag.origStartOffset;
+        clip.startTick = drag.origStartTick + adjustedDx;
+        clip.durationTicks = Math.max(24, drag.origDurationTicks - adjustedDx);
+      }
     }
   }
 
@@ -465,6 +527,10 @@ export class Timeline extends HTMLElement {
         } else if (this._dragState.type === "resize") {
           this.dispatchEvent(new CustomEvent("clip-resize", {
             detail: { clipId: clip.id, startTick: clip.startTick, durationTicks: clip.durationTicks },
+          }));
+        } else if (this._dragState.type === "trim-left") {
+          this.dispatchEvent(new CustomEvent("clip-trim", {
+            detail: { clipId: clip.id, startOffset: clip.startOffset, durationTicks: clip.durationTicks },
           }));
         }
       }

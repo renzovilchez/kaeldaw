@@ -81,7 +81,7 @@ describe("useClipsStore", () => {
     });
     const v0 = useClipsStore.getState().version;
     useClipsStore.getState().setClips([
-      { id: 10, trackId: "t2", trackIndex: 1, startTick: 0, durationTicks: 48, color: "#ef4444", name: "New", notes: [] },
+      { id: 10, trackId: "t2", trackIndex: 1, startTick: 0, durationTicks: 48, color: "#ef4444", name: "New", notes: [], startOffset: 0 },
     ]);
     const s = useClipsStore.getState();
     expect(s.clips).toHaveLength(1);

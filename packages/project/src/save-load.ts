@@ -32,6 +32,7 @@ export function buildProjectSchema(): ProjectSchema {
       id: c.id, trackIndex: c.trackIndex, trackId: c.trackId,
       startTick: c.startTick, durationTicks: c.durationTicks, color: c.color, name: c.name,
       notes: c.notes.map((n) => ({ ...n })),
+      startOffset: c.startOffset,
     })),
     midiNotes: {},
   };
@@ -44,7 +45,7 @@ export function loadProjectSchema(schema: ProjectSchema): void {
     channels: schema.mixerChannels.map((ch) => ({ ...ch, meterLevel: 0 })),
     masterVolume: schema.masterVolume,
   });
-  useClipsStore.getState().setClips(schema.clips);
+  useClipsStore.getState().setClips(schema.clips.map((c) => ({ ...c, startOffset: c.startOffset ?? 0 })));
   useMidiStore.getState().clear();
 }
 
