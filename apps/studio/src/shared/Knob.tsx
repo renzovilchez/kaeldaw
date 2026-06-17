@@ -1,8 +1,8 @@
 import { useEffect, useRef, createElement } from "react";
 
 export function Knob({ value, min, max, size, label, onChange }: {
-  value: number; min: number; max: number; size?: number; label?: string;
-  onChange?: (v: number) => void;
+  value: number; min: number; max: number; size?: number;
+  label?: string; onChange?: (v: number) => void;
 }) {
   const ref = useRef<HTMLElement>(null);
   useEffect(() => {

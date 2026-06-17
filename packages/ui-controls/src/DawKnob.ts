@@ -1,5 +1,11 @@
 import { setupCanvas, setAriaSlider, snapStep, createDragHandlers } from "@kaeldaw/shared/canvas-utils";
 
+const SA = 0.75 * Math.PI;
+const EA = 2.25 * Math.PI;
+const ARC_LEN = EA - SA;
+const WRAPPED_END = EA - 2 * Math.PI;
+const GAP_MID = (WRAPPED_END + SA) / 2;
+
 export class DawKnob extends HTMLElement {
   private _value = 0;
   private _min = 0;
@@ -10,6 +16,8 @@ export class DawKnob extends HTMLElement {
   private canvas: HTMLCanvasElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
   private _drag: ReturnType<typeof createDragHandlers> | null = null;
+  private _dragStartValue = 0;
+  private _dragStartAngle = 0;
 
   static get observedAttributes() {
     return ["value", "min", "max", "step", "size", "label"];
@@ -82,9 +90,37 @@ export class DawKnob extends HTMLElement {
     this.ctx = ctx;
     this.update();
     this._drag = createDragHandlers(
-      undefined,
-      (_, _dx, dy) => {
-        this.value = this._value + dy;
+      (e) => {
+        const rect = this.canvas!.getBoundingClientRect();
+        const cx = rect.left + this._size / 2;
+        const cy = rect.top + this._size / 2;
+        this._dragStartAngle = Math.atan2(e.clientY - cy, e.clientX - cx);
+        const normalizedAngle = this._dragStartAngle < 0
+          ? this._dragStartAngle + 2 * Math.PI
+          : this._dragStartAngle;
+        let ratio: number;
+        if (normalizedAngle >= SA) {
+          ratio = (normalizedAngle - SA) / ARC_LEN;
+        } else if (normalizedAngle < WRAPPED_END) {
+          ratio = (normalizedAngle + 2 * Math.PI - SA) / ARC_LEN;
+        } else {
+          ratio = normalizedAngle < GAP_MID ? 1 : 0;
+        }
+        const range = this._max - this._min;
+        this._dragStartValue = this._min + Math.max(0, Math.min(1, ratio)) * range;
+        this.value = this._dragStartValue;
+        this.dispatchEvent(new CustomEvent("input", { detail: { value: this._value } }));
+      },
+      (e) => {
+        const rect = this.canvas!.getBoundingClientRect();
+        const cx = rect.left + this._size / 2;
+        const cy = rect.top + this._size / 2;
+        const currentAngle = Math.atan2(e.clientY - cy, e.clientX - cx);
+        let deltaAngle = currentAngle - this._dragStartAngle;
+        if (deltaAngle > Math.PI) deltaAngle -= 2 * Math.PI;
+        if (deltaAngle < -Math.PI) deltaAngle += 2 * Math.PI;
+        const range = this._max - this._min;
+        this.value = this._dragStartValue + (deltaAngle / ARC_LEN) * range;
         this.dispatchEvent(new CustomEvent("input", { detail: { value: this._value } }));
       },
     );
@@ -105,22 +141,20 @@ export class DawKnob extends HTMLElement {
     const cx = s / 2;
     const cy = s / 2;
     const r = s / 2 - 4;
-    const startAngle = 0.75 * Math.PI;
-    const endAngle = 2.25 * Math.PI;
     const range = this._max - this._min || 1;
     const ratio = (this._value - this._min) / range;
-    const currentAngle = startAngle + ratio * (endAngle - startAngle);
+    const currentAngle = SA + ratio * ARC_LEN;
 
     ctx.clearRect(0, 0, s, s);
 
     ctx.beginPath();
-    ctx.arc(cx, cy, r, startAngle, endAngle);
+    ctx.arc(cx, cy, r, SA, EA);
     ctx.strokeStyle = "#333";
     ctx.lineWidth = 3;
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.arc(cx, cy, r, startAngle, currentAngle);
+    ctx.arc(cx, cy, r, SA, currentAngle);
     ctx.strokeStyle = "#22d3ee";
     ctx.lineWidth = 3;
     ctx.stroke();
@@ -171,5 +205,3 @@ export class DawKnob extends HTMLElement {
     }
   };
 }
-
-

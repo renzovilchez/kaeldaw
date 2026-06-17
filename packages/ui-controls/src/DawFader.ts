@@ -11,6 +11,7 @@ export class DawFader extends HTMLElement {
   private canvas: HTMLCanvasElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
   private _drag: ReturnType<typeof createDragHandlers> | null = null;
+  private _dragStartValue = 0;
 
   static get observedAttributes() {
     return ["value", "min", "max", "step", "width", "height", "label"];
@@ -87,14 +88,19 @@ export class DawFader extends HTMLElement {
     const { canvas, ctx } = setupCanvas(this);
     this.canvas = canvas;
     this.ctx = ctx;
-    const h = this._height;
-    const thumbH = 8;
     this._drag = createDragHandlers(
-      undefined,
-      (_, _dx, dy) => {
-        const delta = dy / (h - thumbH);
+      (e) => {
+        const rect = this.canvas!.getBoundingClientRect();
+        const y = (e.clientY - rect.top) / this._height;
+        const ratio = 1 - Math.max(0, Math.min(1, y));
         const range = this._max - this._min;
-        this.value = this._value - delta * range;
+        this._dragStartValue = this._min + ratio * range;
+        this.value = this._dragStartValue;
+        this.dispatchEvent(new CustomEvent("input", { detail: { value: this._value } }));
+      },
+      (_, _dx, dy) => {
+        const range = this._max - this._min;
+        this.value = this._dragStartValue - (dy / this._height) * range;
         this.dispatchEvent(new CustomEvent("input", { detail: { value: this._value } }));
       },
     );

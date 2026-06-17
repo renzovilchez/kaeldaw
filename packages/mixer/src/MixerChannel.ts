@@ -151,6 +151,7 @@ export class MixerChannel extends HTMLElement {
     this._fader = document.createElement("daw-fader");
     this._fader.setAttribute("min", "0");
     this._fader.setAttribute("max", "1000");
+    this._fader.setAttribute("step", "10");
     this._fader.setAttribute("width", "12");
     this._fader.setAttribute("height", "72");
     this._fader.setAttribute("value", String(Math.round(this._volume * 1000)));
@@ -170,13 +171,14 @@ export class MixerChannel extends HTMLElement {
     this._panKnob = document.createElement("daw-knob");
     this._panKnob.setAttribute("min", "0");
     this._panKnob.setAttribute("max", "1000");
-    this._panKnob.setAttribute("size", "14");
+    this._panKnob.setAttribute("step", "5");
+    this._panKnob.setAttribute("size", "24");
     this._panKnob.setAttribute("value", String(Math.round((this._pan + 1) / 2 * 1000)));
     this._panKnob.addEventListener("input", this._onPanInput);
     panRow.appendChild(this._panKnob);
 
     this._panLabel = document.createElement("span");
-    this._panLabel.style.cssText = "font-size:6px;color:#666;margin-left:2px";
+    this._panLabel.style.cssText = "font-size:6px;color:#666;width:18px;display:inline-block;text-align:center";
     this._panLabel.textContent = this._panText();
     panRow.appendChild(this._panLabel);
 
@@ -204,7 +206,7 @@ export class MixerChannel extends HTMLElement {
   }
 
   private _panText(): string {
-    if (this._pan === 0) return "C";
+    if (Math.abs(this._pan * 100) < 1) return "C";
     return this._pan > 0 ? `R${Math.round(this._pan * 100)}` : `L${Math.round(-this._pan * 100)}`;
   }
 
