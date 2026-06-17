@@ -26,7 +26,7 @@ const NOTES_PER_OCTAVE = 12;
 const A4_MIDI = 69;
 const A4_FREQ = 440;
 
-export type OscillatorType = "sine" | "saw" | "square";
+export type OscillatorType = "sine" | "saw" | "square" | "triangle" | "noise";
 
 export type SynthVoiceConfig = {
   oscillatorType: OscillatorType;
@@ -39,6 +39,8 @@ export type SynthVoiceConfig = {
   ampEnvRelease: number;
   volume: number;
   polyphony: number;
+  pitchEnvAmount: number;
+  pitchEnvAttack: number;
 };
 
 const DEFAULT_CONFIG: SynthVoiceConfig = {
@@ -52,6 +54,8 @@ const DEFAULT_CONFIG: SynthVoiceConfig = {
   ampEnvRelease: 0.3,
   volume: 0.5,
   polyphony: 8,
+  pitchEnvAmount: 0,
+  pitchEnvAttack: 0,
 };
 
 function midiToFreq(note: number): number {
@@ -67,6 +71,7 @@ interface Voice {
   age: number;
   active: boolean;
   released: boolean;
+  elapsed: number;
 }
 
 export class PolySynth {
@@ -101,16 +106,20 @@ export class PolySynth {
     voice.age = ++this._ageCounter;
     voice.active = true;
     voice.released = false;
+    voice.elapsed = 0;
 
     const sr = this._sampleRate;
     const c = this._config;
-    const needSquare = c.oscillatorType === "square";
-    const isSquare = voice.oscillator instanceof m.BandlimitedSquare;
-    if (needSquare !== isSquare) {
-      voice.oscillator?.free();
-      voice.oscillator = needSquare ? new m.BandlimitedSquare(sr) : new m.BandlimitedSaw(sr);
-    } else {
-      voice.oscillator?.reset();
+    const useOsc = c.oscillatorType !== "noise";
+    if (useOsc) {
+      const needSquare = c.oscillatorType === "square";
+      const isSquare = voice.oscillator instanceof m.BandlimitedSquare;
+      if (needSquare !== isSquare) {
+        voice.oscillator?.free();
+        voice.oscillator = needSquare ? new m.BandlimitedSquare(sr) : new m.BandlimitedSaw(sr);
+      } else {
+        voice.oscillator?.reset();
+      }
     }
 
     voice.adsr?.free();
@@ -164,18 +173,33 @@ export class PolySynth {
     let left = 0;
     let right = 0;
     const dt = 1 / this._sampleRate;
-    const oscType = this._config.oscillatorType;
-    const vol = this._config.volume;
+    const c = this._config;
     const m = this._dsp;
 
     for (const v of this._voices) {
-      if (!v.active || !v.oscillator || !v.adsr) continue;
+      if (!v.active || !v.adsr) continue;
 
-      const freq = midiToFreq(v.note) * Math.pow(2, this._config.oscillatorDetune / 1200);
+      // Pitch envelope
+      let pitchOffset = 0;
+      if (c.pitchEnvAmount !== 0 && v.elapsed < c.pitchEnvAttack) {
+        const t = v.elapsed / c.pitchEnvAttack;
+        pitchOffset = c.pitchEnvAmount * (1 - t);
+      }
+      v.elapsed += dt;
+
+      const freq = midiToFreq(v.note + pitchOffset) * Math.pow(2, c.oscillatorDetune / 1200);
       let raw: number;
 
-      if (oscType === "sine") {
+      if (c.oscillatorType === "noise") {
+        raw = Math.random() * 2 - 1;
+      } else if (!v.oscillator) {
+        raw = 0;
+      } else if (c.oscillatorType === "sine") {
         raw = Math.sin(TAU * v.oscillator.get_phase());
+        v.oscillator.process(freq);
+      } else if (c.oscillatorType === "triangle") {
+        const phase = v.oscillator.get_phase();
+        raw = 1 - 4 * Math.abs(phase - 0.5);
         v.oscillator.process(freq);
       } else {
         raw = v.oscillator.process(freq);
@@ -183,7 +207,7 @@ export class PolySynth {
 
       const filtered = m.biquad_process(v.filterHandle, raw);
       const amp = v.adsr.process(dt);
-      const sample = filtered * amp * v.velocity * vol;
+      const sample = filtered * amp * v.velocity * c.volume;
 
       left += sample;
       right += sample;
@@ -227,6 +251,7 @@ export class PolySynth {
       age: 0,
       active: false,
       released: false,
+      elapsed: 0,
     };
   }
 
