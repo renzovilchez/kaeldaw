@@ -19,8 +19,7 @@ function writeString(view: DataView, offset: number, str: string): void {
   }
 }
 
-export function encodeWav(samples: Float32Array, sampleRate: number, bitDepth: 16 | 24 | 32 = 16): ArrayBuffer {
-  const numChannels = 1;
+export function encodeWav(samples: Float32Array, sampleRate: number, bitDepth: 16 | 24 | 32 = 16, numChannels = 1): ArrayBuffer {
   const bytesPerSample = bitDepth / 8;
   const blockAlign = numChannels * bytesPerSample;
   const byteRate = sampleRate * blockAlign;
@@ -50,6 +49,10 @@ export function encodeWav(samples: Float32Array, sampleRate: number, bitDepth: 1
     if (bitDepth === 16) {
       const val = s < 0 ? s * 32768 : s * 32767;
       view.setInt16(44 + i * 2, Math.round(val), true);
+    } else if (bitDepth === 24) {
+      const val = Math.round((s < 0 ? s * 8388608 : s * 8388607));
+      view.setInt16(44 + i * 3, val & 0xFFFF, true);
+      view.setInt8(44 + i * 3 + 2, (val >> 16) & 0xFF);
     } else if (bitDepth === 32) {
       view.setFloat32(44 + i * 4, s, true);
     }

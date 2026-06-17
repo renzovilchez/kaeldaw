@@ -42,14 +42,24 @@ export async function renderProject(
     channelMap.set(ch.id, ch);
   }
 
+const TICKS_PER_BEAT_VISUAL = 24;
+const VISUAL_TO_PPQN = Transport.ppqn / TICKS_PER_BEAT_VISUAL;
+
   // Collect all MIDI events with trackId
   const events: MidiEvent[] = [];
   for (const clip of clips) {
     const ch = channelMap.get(clip.trackId);
     if (ch?.mute) continue;
+    const offset = clip.startOffset ?? 0;
+    const clipEnd = clip.startTick + clip.durationTicks;
     for (const note of clip.notes) {
-      events.push({ tick: clip.startTick + note.startTick, note: note.note, velocity: note.velocity, type: "on", trackId: clip.trackId });
-      events.push({ tick: clip.startTick + note.startTick + note.durationTicks, note: note.note, velocity: 0, type: "off", trackId: clip.trackId });
+      const noteAbsStart = clip.startTick + note.startTick - offset;
+      const noteAbsEnd = noteAbsStart + note.durationTicks;
+      const clampedStart = Math.max(clip.startTick, noteAbsStart);
+      const clampedEnd = Math.min(clipEnd, noteAbsEnd);
+      if (clampedStart >= clampedEnd) continue;
+      events.push({ tick: clampedStart * VISUAL_TO_PPQN, note: note.note, velocity: note.velocity, type: "on", trackId: clip.trackId });
+      events.push({ tick: clampedEnd * VISUAL_TO_PPQN, note: note.note, velocity: 0, type: "off", trackId: clip.trackId });
     }
   }
   events.sort((a, b) => a.tick - b.tick);
@@ -171,13 +181,7 @@ export async function renderProject(
 
   onProgress?.({ percent: 99, stage: "Encoding WAV..." });
 
-  // Convert stereo to mono for WAV by summing channels
-  const monoBuffer = new Float32Array(totalSamples);
-  for (let i = 0; i < totalSamples; i++) {
-    monoBuffer[i] = (masterBuffer[i * 2] + masterBuffer[i * 2 + 1]) * 0.5;
-  }
-
-  const masterBlob = new Blob([encodeWav(monoBuffer, sr, 16)], { type: "audio/wav" });
+  const masterBlob = new Blob([encodeWav(masterBuffer, sr, 24, 2)], { type: "audio/wav" });
 
   onProgress?.({ percent: 100, stage: "Done" });
 
