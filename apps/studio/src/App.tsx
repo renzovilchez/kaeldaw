@@ -1,4 +1,4 @@
-import { useRef, useEffect, createElement, useCallback, useState, memo, type MutableRefObject } from "react";
+import { useRef, useEffect, createElement, useCallback, useState, useMemo, memo, type MutableRefObject } from "react";
 import { useTracksStore } from "@kaeldaw/project/useTracksStore";
 import { useMixerStore } from "@kaeldaw/project/useMixerStore";
 import { useProjectStore } from "@kaeldaw/project/useProjectStore";
@@ -379,7 +379,7 @@ function AppInner() {
   const projectName = useProjectStore((s) => s.name);
   const setName = useProjectStore((s) => s.setName);
 
-  const channelMap = new Map(channels.map((c) => [c.id, c]));
+  const channelMap = useMemo(() => new Map(channels.map((c) => [c.id, c])), [channels]);
 
   const setFocusedContext = useUndoStore((s) => s.setFocusedContext);
 
@@ -413,20 +413,20 @@ function AppInner() {
   undoFnsRef.current.tracks = () => {
     const state = useTracksStore.getState();
     const snap = useUndoStore.getState().undo("tracks", () => ({
-      tracks: state.tracks.map((t) => ({ id: t.id, name: t.name })),
+      tracks: state.tracks.map((t) => ({ id: t.id, name: t.name, color: t.color, presetId: t.presetId })),
     }));
     if (snap) {
-      const s = snap as { tracks: { id: string; name: string }[] };
+      const s = snap as { tracks: { id: string; name: string; color: string; presetId: string }[] };
       useTracksStore.setState({ tracks: s.tracks, selectedId: useTracksStore.getState().selectedId });
     }
   };
   redoFnsRef.current.tracks = () => {
     const state = useTracksStore.getState();
     const snap = useUndoStore.getState().redo("tracks", () => ({
-      tracks: state.tracks.map((t) => ({ id: t.id, name: t.name })),
+      tracks: state.tracks.map((t) => ({ id: t.id, name: t.name, color: t.color, presetId: t.presetId })),
     }));
     if (snap) {
-      const s = snap as { tracks: { id: string; name: string }[] };
+      const s = snap as { tracks: { id: string; name: string; color: string; presetId: string }[] };
       useTracksStore.setState({ tracks: s.tracks, selectedId: useTracksStore.getState().selectedId });
     }
   };
@@ -555,6 +555,30 @@ function AppInner() {
     });
   };
 
+  const handleSelectTrack = useCallback((id: string) => {
+    selectTrack(id);
+    const track = useTracksStore.getState().tracks.find((t) => t.id === id);
+    if (track) instrumentManager.selectPreset(track.presetId);
+  }, [selectTrack]);
+
+  const handleColorChange = useCallback((id: string, color: string) => {
+    useTracksStore.getState().setTrackColor(id, color);
+  }, []);
+
+  // Sync track presetId when Synth Editor changes preset
+  useEffect(() => {
+    const unsub = instrumentManager.subscribe(() => {
+      const selectedTrackId = useTracksStore.getState().selectedId;
+      if (selectedTrackId) {
+        const track = useTracksStore.getState().tracks.find((t) => t.id === selectedTrackId);
+        if (track && track.presetId !== instrumentManager.selectedId) {
+          useTracksStore.getState().setTrackPreset(selectedTrackId, instrumentManager.selectedId);
+        }
+      }
+    });
+    return unsub;
+  }, []);
+
   const handleVolumeChange = useCallback((id: string, v: number) => {
     mixerExec(() => setVolume(id, v));
   }, [setVolume]);
@@ -657,12 +681,14 @@ function AppInner() {
             tracks={tracks}
             selectedId={selectedId}
             channelMap={channelMap}
-            onSelect={selectTrack}
+            presets={new Map(instrumentManager.presets.map((p) => [p.id, { name: p.name, icon: p.icon }]))}
+            onSelect={handleSelectTrack}
             onToggleMute={handleToggleMute}
             onToggleSolo={handleToggleSolo}
             onVolumeChange={handleVolumeChange}
             onPanChange={handlePanChange}
             onAddTrack={handleAddTrack}
+            onColorChange={handleColorChange}
           />
         </FloatingWindow>
 

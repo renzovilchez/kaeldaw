@@ -18,7 +18,7 @@ export function buildProjectSchema(): ProjectSchema {
     bpm: project.bpm,
     timeSignature: project.timeSignature,
     ppqn: project.ppqn,
-    tracks: tracks.tracks.map((t) => ({ id: t.id, name: t.name })),
+    tracks: tracks.tracks.map((t) => ({ id: t.id, name: t.name, color: t.color, presetId: t.presetId })),
     mixerChannels: mixer.channels.map((ch) => ({
       id: ch.id,
       name: ch.name,
@@ -40,7 +40,10 @@ export function buildProjectSchema(): ProjectSchema {
 
 export function loadProjectSchema(schema: ProjectSchema): void {
   useProjectStore.getState().loadFromSchema(schema);
-  useTracksStore.setState({ tracks: schema.tracks, selectedId: null });
+  useTracksStore.setState({
+    tracks: schema.tracks.map((t) => ({ ...t, color: t.color ?? "#22d3ee", presetId: t.presetId ?? "poly-saw" })),
+    selectedId: null,
+  });
   useMixerStore.setState({
     channels: schema.mixerChannels.map((ch) => ({ ...ch, meterLevel: 0 })),
     masterVolume: schema.masterVolume,

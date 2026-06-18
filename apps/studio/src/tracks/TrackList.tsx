@@ -1,16 +1,21 @@
+import { memo } from "react";
 import { TrackRow } from "./TrackRow";
 
-export function TrackList({ tracks, selectedId, channelMap,
-  onSelect, onToggleMute, onToggleSolo, onVolumeChange, onPanChange, onAddTrack }: {
-  tracks: { id: string; name: string }[];
+export type PresetInfo = { name: string; icon: string };
+
+export const TrackList = memo(function TrackList({ tracks, selectedId, channelMap, presets,
+  onSelect, onToggleMute, onToggleSolo, onVolumeChange, onPanChange, onAddTrack, onColorChange }: {
+  tracks: { id: string; name: string; color: string; presetId: string }[];
   selectedId: string | null;
   channelMap: Map<string, { mute: boolean; solo: boolean; volume: number; pan: number }>;
+  presets?: Map<string, PresetInfo>;
   onSelect: (id: string) => void;
   onToggleMute: (id: string) => void;
   onToggleSolo: (id: string) => void;
   onVolumeChange: (id: string, v: number) => void;
   onPanChange: (id: string, v: number) => void;
   onAddTrack: () => void;
+  onColorChange?: (id: string, color: string) => void;
 }) {
   return (
     <div className="w-56 bg-surface-alt border-r border-border flex flex-col shrink-0 h-full">
@@ -23,11 +28,13 @@ export function TrackList({ tracks, selectedId, channelMap,
           <div className="p-3 text-[10px] text-text-muted italic">No tracks</div>
         ) : tracks.map((track) => {
           const ch = channelMap.get(track.id);
+          const pi = presets?.get(track.presetId);
           return (
             <TrackRow key={track.id} track={track} selectedId={selectedId}
               mute={ch?.mute ?? false} solo={ch?.solo ?? false} volume={ch?.volume ?? 1} pan={ch?.pan ?? 0}
+              presetName={pi?.name} presetIcon={pi?.icon}
               onSelect={onSelect} onToggleMute={onToggleMute} onToggleSolo={onToggleSolo}
-              onVolumeChange={onVolumeChange} onPanChange={onPanChange} />
+              onVolumeChange={onVolumeChange} onPanChange={onPanChange} onColorChange={onColorChange} />
           );
         })}
       </div>
@@ -37,4 +44,4 @@ export function TrackList({ tracks, selectedId, channelMap,
       </button>
     </div>
   );
-}
+});

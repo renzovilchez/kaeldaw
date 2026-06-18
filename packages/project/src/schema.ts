@@ -10,6 +10,8 @@ export class SchemaValidationError extends Error {
 export interface ProjectTrack {
   id: string;
   name: string;
+  color?: string;
+  presetId?: string;
 }
 
 export interface ProjectMixerChannel {
