@@ -196,6 +196,8 @@ export class PolySynth {
       if (typeChanged) {
         v.oscillator?.free();
         v.oscillator = null;
+        m.biquad_free(v.filterHandle);
+        v.filterHandle = m.biquad_init(this._sampleRate);
       } else if (cutoffChanged && v.active) {
         m.biquad_free(v.filterHandle);
         v.filterHandle = m.biquad_set(this._sampleRate, 0, this._config.filterCutoff, this._config.filterResonance, 0);
@@ -219,7 +221,7 @@ export class PolySynth {
 
       // Pitch envelope
       let pitchOffset = 0;
-      if (c.pitchEnvAmount !== 0 && v.elapsed < c.pitchEnvAttack) {
+      if (c.pitchEnvAmount !== 0 && c.pitchEnvAttack > 0 && v.elapsed < c.pitchEnvAttack) {
         const t = v.elapsed / c.pitchEnvAttack;
         pitchOffset = c.pitchEnvAmount * (1 - t);
       }

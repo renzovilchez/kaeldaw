@@ -1,6 +1,6 @@
 import { createContext, useContext, useReducer, useCallback, useMemo, useEffect, useRef, type ReactNode } from "react";
 
-type WindowId = "timeline" | "piano-roll" | "mixer" | "tracks" | "waveform";
+type WindowId = "timeline" | "piano-roll" | "mixer" | "tracks" | "waveform" | "synth-editor";
 
 type WindowState = {
   id: WindowId;
@@ -37,6 +37,7 @@ const defaults: Record<WindowId, Omit<WindowState, "id" | "zIndex">> = {
   "mixer":       { title: "Mixer",      isOpen: false, isMinimized: false, isMaximized: false, position: { x: 220, y: 60 },   size: { width: 800, height: 350 } },
   "tracks":      { title: "Tracks",     isOpen: true,  isMinimized: false, isMaximized: false, position: { x: 930, y: 50 },  size: { width: 260, height: 400 } },
   "waveform":    { title: "Waveform",   isOpen: false, isMinimized: false, isMaximized: false, position: { x: 260, y: 100 }, size: { width: 600, height: 200 } },
+  "synth-editor": { title: "Synth Editor", isOpen: false, isMinimized: false, isMaximized: false, position: { x: 300, y: 60 }, size: { width: 540, height: 520 } },
 };
 
 function buildDefault(): Record<WindowId, WindowState> {
@@ -52,7 +53,7 @@ function buildInitialState(): State {
   const saved = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
   if (saved) {
     try {
-      const windows = JSON.parse(saved) as Record<WindowId, WindowState>;
+      const windows = { ...buildDefault(), ...JSON.parse(saved) } as Record<WindowId, WindowState>;
       const maxZ = Math.max(0, ...Object.values(windows).map((w) => w.zIndex));
       return { nextZ: maxZ + 1, windows };
     } catch { /* ignore */ }
@@ -101,7 +102,7 @@ function reducer(state: State, action: Action): State {
       return { ...state, windows: { ...state.windows, [action.id]: { ...w, size: { width: action.width, height: action.height } } } };
     }
     case "LOAD": {
-      const incoming = action.windows;
+      const incoming = { ...buildDefault(), ...action.windows };
       const maxZ = Math.max(0, ...Object.values(incoming).map((w) => w.zIndex));
       return { ...state, nextZ: Math.max(state.nextZ, maxZ + 1), windows: incoming };
     }

@@ -33,27 +33,81 @@ const DEFAULT_PRESETS: InstrumentPreset[] = [
   { id: "poly-harpsi", name: "Harpsichord", category: "Keys", icon: "🎹", config: { oscillatorType: "pluck", filterCutoff: 14000, filterResonance: 0, ampEnvAttack: 0.001, ampEnvDecay: 0.6, ampEnvSustain: 0, ampEnvRelease: 0.05, volume: 0.4, pitchEnvAmount: 0, pitchEnvAttack: 0, lfoRate: 0, lfoDepth: 0, lfoTarget: "none", fmModRatio: 1, fmModLevel: 0, fmCarRatio: 1, pluckDamping: 0.1 } },
 ];
 
+const CUSTOM_PRESETS_KEY = "kaeldaw-custom-presets";
+
+function loadCustomPresets(): InstrumentPreset[] {
+  try {
+    const raw = localStorage.getItem(CUSTOM_PRESETS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCustomPresets(presets: InstrumentPreset[]): void {
+  localStorage.setItem(CUSTOM_PRESETS_KEY, JSON.stringify(presets));
+}
+
 type Listener = () => void;
 
 class InstrumentManager {
   private _selectedId = "poly-saw";
   private _collapsed: Record<string, boolean> = {};
   private _listeners = new Set<Listener>();
+  private _customPresets: InstrumentPreset[] = loadCustomPresets();
+  private _version = 0;
 
-  get presets(): InstrumentPreset[] { return DEFAULT_PRESETS; }
+  get presets(): InstrumentPreset[] { return [...DEFAULT_PRESETS, ...this._customPresets]; }
   get selectedId(): string { return this._selectedId; }
   get collapsed(): Record<string, boolean> { return this._collapsed; }
+  get version(): number { return this._version; }
 
   selectPreset(id: string) {
-    const preset = DEFAULT_PRESETS.find((p) => p.id === id);
+    const preset = this.presets.find((p) => p.id === id);
     if (!preset) return;
     this._selectedId = id;
     PolySynthOutput.setConfig(preset.config);
     this._notify();
   }
 
+  nextPreset() {
+    const list = this.presets;
+    const idx = list.findIndex((p) => p.id === this._selectedId);
+    if (idx < list.length - 1) this.selectPreset(list[idx + 1].id);
+  }
+
+  prevPreset() {
+    const list = this.presets;
+    const idx = list.findIndex((p) => p.id === this._selectedId);
+    if (idx > 0) this.selectPreset(list[idx - 1].id);
+  }
+
+  updateConfig(changes: Record<string, unknown>) {
+    PolySynthOutput.setConfig(changes);
+    this._version++;
+    this._notify();
+  }
+
+  saveCustomPreset(name: string) {
+    const preset = this.presets.find((p) => p.id === this._selectedId);
+    if (!preset) return;
+    const id = `custom-${Date.now()}`;
+    const newPreset: InstrumentPreset = {
+      id,
+      name,
+      category: "Custom",
+      icon: "⭐",
+      config: { ...preset.config },
+    };
+    this._customPresets.push(newPreset);
+    saveCustomPresets(this._customPresets);
+    this._selectedId = id;
+    PolySynthOutput.setConfig(newPreset.config);
+    this._notify();
+  }
+
   getSelectedConfig(): Record<string, unknown> {
-    const preset = DEFAULT_PRESETS.find((p) => p.id === this._selectedId);
+    const preset = this.presets.find((p) => p.id === this._selectedId);
     return preset?.config ?? {};
   }
 

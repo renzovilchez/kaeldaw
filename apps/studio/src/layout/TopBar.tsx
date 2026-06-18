@@ -13,7 +13,6 @@ const WINDOWS = [
   { id: "piano-roll" as const, icon: "🎼", label: "Piano Roll" },
   { id: "mixer" as const, icon: "🎚️", label: "Mixer" },
   { id: "tracks" as const, icon: "📋", label: "Tracks" },
-  { id: "waveform" as const, icon: "📊", label: "Waveform" },
 ];
 
 function formatPosition(

@@ -20,6 +20,7 @@ import { TrackList } from "./tracks/TrackList";
 import { MixerPanel } from "./mixer/MixerPanel";
 import { FloatingWindow } from "./components/FloatingWindow";
 import { Sidebar } from "./instruments/Sidebar";
+import { SynthEditor } from "./synth-edit/SynthEditor";
 import { instrumentManager } from "./stores/useInstrumentStore";
 
 const WINDOW_TO_CTX: Record<string, UndoContext> = {
@@ -361,42 +362,6 @@ const PianoRollWindow = memo(function PianoRollWindow({ undoRefs, redoRefs }: { 
   });
 });
 
-function WaveformWindow() {
-  const elRef = useRef<HTMLElement>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    const tick = () => {
-      if (cancelled) return;
-      const el = elRef.current as any;
-      if (el) {
-        const samples = PolySynthOutput.getWaveformSamples();
-        if (samples) el.samples = samples;
-      }
-      setTimeout(tick, 80);
-    };
-    tick();
-    return () => { cancelled = true; };
-  }, []);
-
-  return createElement(
-    "div",
-    {
-      style: {
-        width: "100%",
-        height: "100%",
-        padding: 8,
-        background: "#353535",
-      },
-    },
-    // eslint-disable-next-line react-hooks/refs
-    createElement("daw-waveform", {
-      ref: elRef,
-      style: { width: "100%", height: "100%", display: "block" },
-    }),
-  );
-}
-
 function AppInner() {
   const tracks = useTracksStore((s) => s.tracks);
   const addTrack = useTracksStore((s) => s.addTrack);
@@ -701,8 +666,8 @@ function AppInner() {
           />
         </FloatingWindow>
 
-        <FloatingWindow id="waveform" sidebarWidth={sidebarWidth}>
-          <WaveformWindow />
+        <FloatingWindow id="synth-editor" sidebarWidth={sidebarWidth}>
+          <SynthEditor />
         </FloatingWindow>
       </div>
     </div>
