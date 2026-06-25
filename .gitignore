@@ -36,6 +36,7 @@ crates/dsp/pkg
 **/*.d.ts
 **/*.d.ts.map
 **/src/**/*.js
+!**/src/worklet/*.js
 **/src/**/*.js.map
 
 # Environment variables

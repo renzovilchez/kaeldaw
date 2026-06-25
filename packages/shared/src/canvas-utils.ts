@@ -1,4 +1,7 @@
-export function setupCanvas(host: HTMLElement): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } {
+export function setupCanvas(host: HTMLElement): {
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+} {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d")!;
   host.appendChild(canvas);
@@ -6,7 +9,13 @@ export function setupCanvas(host: HTMLElement): { canvas: HTMLCanvasElement; ctx
   return { canvas, ctx };
 }
 
-export function setAriaSlider(host: HTMLElement, value: number, min: number, max: number, label?: string): void {
+export function setAriaSlider(
+  host: HTMLElement,
+  value: number,
+  min: number,
+  max: number,
+  label?: string,
+): void {
   host.setAttribute("role", "slider");
   host.setAttribute("aria-valuenow", String(value));
   host.setAttribute("aria-valuemin", String(min));
@@ -22,7 +31,12 @@ export function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
 }
 
-export function snapStep(v: number, step: number, min: number, max: number): number {
+export function snapStep(
+  v: number,
+  step: number,
+  min: number,
+  max: number,
+): number {
   const snapped = Math.round((v - min) / step) * step + min;
   return clamp(snapped, min, max);
 }
@@ -77,8 +91,6 @@ export function createDragHandlers(
     },
     detach(el: HTMLElement) {
       el.removeEventListener("mousedown", onMouseDown);
-      document.removeEventListener("mousemove", onMouseMove);
-      document.removeEventListener("mouseup", onMouseUp);
     },
   };
 }
