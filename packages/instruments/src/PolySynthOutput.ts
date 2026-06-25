@@ -1,5 +1,5 @@
 import { AudioContextManager } from "@kaeldaw/audio-engine/AudioContextManager";
-// @ts-ignore - Vite provides WASM URL resolution
+// @ts-expect-error - Vite provides WASM URL resolution
 import wasmUrl from "kaeldaw-dsp/kaeldaw_dsp_bg.wasm?url";
 
 const WORKLET_CODE = `
@@ -213,7 +213,7 @@ class Synth {
     for(let i=0;i<6;i++) this.vs.push(this._mk());
   }
   _mk() {
-    return {on:false,note:0,vel:0,age:0,rel:false,fadeIn:0,osc:makeOsc(this.cfg.oscillatorType,this.sr),adsr:makeAdsr(this.cfg.ampEnvAttack,this.cfg.ampEnvDecay,this.cfg.ampEnvSustain,this.cfg.ampEnvRelease),flt:makeFilter(this.sr,this.cfg.filterCutoff,this.cfg.filterResonance)};
+    return {on:false,note:0,vel:0,age:0,rel:false,fadeIn:0,channelId:"",osc:makeOsc(this.cfg.oscillatorType,this.sr),adsr:makeAdsr(this.cfg.ampEnvAttack,this.cfg.ampEnvDecay,this.cfg.ampEnvSustain,this.cfg.ampEnvRelease),flt:makeFilter(this.sr,this.cfg.filterCutoff,this.cfg.filterResonance)};
   }
   _alloc() {
     for(let i=0;i<this.vs.length;i++) if(!this.vs[i].on) return this.vs[i];
@@ -222,11 +222,12 @@ class Synth {
     if(o.on) o.fadeIn=Math.round(0.005*this.sr);
     return o;
   }
-  noteOn(n,v) {
+  noteOn(n,v,chId) {
     const vc=this._alloc();
     vc.note=Math.max(0,Math.min(127,Math.round(n)|0));
     vc.vel=Math.max(0,Math.min(127,v))/127;
     vc.age=++this.ac; vc.on=true; vc.rel=false;
+    vc.channelId=chId||"";
     vc.osc=makeOsc(this.cfg.oscillatorType,this.sr);
     vc.adsr=makeAdsr(this.cfg.ampEnvAttack,this.cfg.ampEnvDecay,this.cfg.ampEnvSustain,this.cfg.ampEnvRelease);
     vc.adsr.on();
@@ -246,8 +247,9 @@ class Synth {
   }
   setCfg(c) { if(c)Object.assign(this.cfg,c); }
   sample() {
-    let s=0; let nv=0;
-    const vol=this.cfg.volume; const det=Math.pow(2,this.cfg.oscillatorDetune/1200);
+    const cs={}; let nv=0;
+    const det=Math.pow(2,this.cfg.oscillatorDetune/1200);
+    const vol=this.cfg.volume;
     for(let j=0;j<this.vs.length;j++) {
       const v=this.vs[j];
       if(!v.on) continue;
@@ -258,12 +260,14 @@ class Synth {
       const amp=v.adsr.tick(this.dt)||0;
       let g=flt*amp*v.vel*vol;
       if(v.fadeIn>0){g*=(1-v.fadeIn/Math.round(0.005*this.sr));v.fadeIn--;}
-      s+=g; nv++;
+      const chId=v.channelId||"default";
+      cs[chId]=(cs[chId]||0)+g;
+      nv++;
       if(v.adsr.done) v.on=false;
     }
-    if(nv>1) s/=Math.sqrt(nv);
-    s=s/(1+Math.abs(s));
-    return s||0;
+    if(nv>1){const n=1/Math.sqrt(nv);for(const k in cs)cs[k]*=n;}
+    for(const k in cs)cs[k]=cs[k]/(1+Math.abs(cs[k]));
+    return cs;
   }
 }
 
@@ -291,6 +295,11 @@ class Proc extends AudioWorkletProcessor {
     this.bpb4=4;
     this.clen=0;this.cfreq=0;this.camp=0;this.cdecay=0;this.csmp=0;
     this.wb=new Float32Array(2048);this.wi=0;
+    this.chState={};
+    this.chDelay={};
+    this.chReverb={};
+    this.busDelay={};
+    this.busReverb={};
     this.port.onmessage=e=>{
       const m=e.data;
       switch(m.type){
@@ -303,15 +312,15 @@ class Proc extends AudioWorkletProcessor {
           for(;ei<sorted.length;ei++){
             const ev=sorted[ei];
             if(Math.round(ev.tick*this.t2s)>=this.smp) break;
-            if(ev.type==="on") active.set(ev.note,ev.velocity);
+            if(ev.type==="on") active.set(ev.note,{vel:ev.velocity,chId:ev.channelId||""});
             else active.delete(ev.note);
           }
           this.events=sorted;
           this.idx=ei;
-          for(const[n,v]of active) this.synth.noteOn(n,v);
+          for(const[n,v]of active) this.synth.noteOn(n,v.vel,v.chId);
           break;
         }
-        case "noteOn": this.synth.noteOn(m.note,m.vel); break;
+        case "noteOn": this.synth.noteOn(m.note,m.vel,m.channelId||""); break;
         case "noteOff": this.synth.noteOff(m.note); break;
         case "allOff":
           this.synth.allOff();
@@ -320,10 +329,17 @@ class Proc extends AudioWorkletProcessor {
           break;
         case "cfg": this.synth.setCfg(m.config); break;
         case "metro": this.ppqn2=m.ppqn; this.bpb4=m.beats; this.metro=m.enabled; break;
-        case "fx":
-          if(m.delay!==undefined)this.delayOn=m.delay;
-          if(m.reverb!==undefined)this.reverbOn=m.reverb;
+        case "channelFx":{
+          const c=this.chState[m.channelId]||{};
+          if(m.volume!==void 0)c.volume=m.volume;
+          if(m.pan!==void 0)c.pan=m.pan;
+          if(m.mute!==void 0)c.mute=m.mute;
+          if(m.insertDelay!==void 0)c.insertDelay=m.insertDelay;
+          if(m.insertReverb!==void 0)c.insertReverb=m.insertReverb;
+          if(m.sendLevel!==void 0)c.sendLevel=m.sendLevel;
+          this.chState[m.channelId]=c;
           break;
+        }
         case "wasm":{
           try{
             const inst=new WebAssembly.Instance(m.module,{wbg:{
@@ -348,6 +364,7 @@ class Proc extends AudioWorkletProcessor {
     try {
       const L=o[0]&&o[0][0],R=o[0]&&o[0][1];
       if(!L||!R) return true;
+      const DC={volume:0.8,pan:0,mute:false,insertDelay:false,insertReverb:false,sendLevel:0};
       for(let i=0;i<L.length;i++) {
         const cur=this.smp+i;
         while(this.idx<this.events.length){
@@ -356,19 +373,45 @@ class Proc extends AudioWorkletProcessor {
           if(evSmp>cur) break;
           this.idx++;
           if(evSmp===cur){
-            if(ev.type==="on") this.synth.noteOn(ev.note,ev.velocity);
+            if(ev.type==="on") this.synth.noteOn(ev.note,ev.velocity,ev.channelId||"");
             else this.synth.noteOff(ev.note);
           }
         }
-        let s=this.synth.sample();
-        if(this.delayOn){
-          if(useWasm()&&this.delayHandle>=0)s=wasm.delay_process(this.delayHandle,s);
-          else s=this.delayJs.run(s);
+        const chOut=this.synth.sample();
+        let master=0;
+        const busAc={};
+        for(const chId in chOut){
+          const sum=chOut[chId];
+          const ch=this.chState[chId]||DC;
+          if(ch.mute) continue;
+          let ss=sum;
+          if(ch.insertDelay){
+            if(!this.chDelay[chId])this.chDelay[chId]=new Delay(this.sr,2);
+            ss=this.chDelay[chId].run(ss);
+          }
+          if(ch.insertReverb){
+            if(!this.chReverb[chId])this.chReverb[chId]=new Reverb(this.sr);
+            ss=this.chReverb[chId].run(ss);
+          }
+          if(ch.sendLevel>0)busAc["reverb-bus"]=(busAc["reverb-bus"]||0)+ss*ch.sendLevel;
+          const angle=(ch.pan+1)*Math.PI/4;
+          master+=ss*ch.volume*(Math.cos(angle)+Math.sin(angle));
         }
-        if(this.reverbOn){
-          if(useWasm()&&this.reverbHandle>=0)s=wasm.reverb_process(this.reverbHandle,s);
-          else s=this.reverbJs.run(s);
+        for(const busId in busAc){
+          const bus=this.chState[busId];
+          if(!bus) continue;
+          let ss=busAc[busId];
+          if(bus.insertDelay){
+            if(!this.busDelay[busId])this.busDelay[busId]=new Delay(this.sr,2);
+            ss=this.busDelay[busId].run(ss);
+          }
+          if(bus.insertReverb){
+            if(!this.busReverb[busId])this.busReverb[busId]=new Reverb(this.sr);
+            ss=this.busReverb[busId].run(ss);
+          }
+          master+=ss*bus.volume;
         }
+        master=master/(1+Math.abs(master));
         if(this.metro){
           const tickAt=cur/this.t2s;
           const tickFloor=Math.floor(tickAt);
@@ -385,16 +428,16 @@ class Proc extends AudioWorkletProcessor {
             const t=this.csmp/this.sr;
             const env=Math.exp(-t*this.cdecay);
             const click=Math.sin(2*Math.PI*this.cfreq*t)*this.camp*env;
-            s+=click;
+            master+=click;
             this.clen--; this.csmp++;
           }
         }
         if(this.fadeOut>0){
-          s*=this.fadeOut/this.fadeOutMax;
+          master*=this.fadeOut/this.fadeOutMax;
           this.fadeOut--;
         }
-        L[i]=s; R[i]=s;
-        this.wb[this.wi]=s; this.wi=(this.wi+1)%this.wb.length;
+        L[i]=master; R[i]=master;
+        this.wb[this.wi]=master; this.wi=(this.wi+1)%this.wb.length;
       }
       this.smp+=L.length;
       this.bc++;
@@ -423,23 +466,34 @@ export class PolySynthOutputSingleton {
   private _waveformBuf = new Float32Array(2048);
   private _waveformIdx = 0;
   private _pendingMetronome: { enabled: boolean; ppqn: number; beats: number } | null = null;
-  private _delayEnabled = false;
-  private _reverbEnabled = false;
+  private _channelStates = new Map<string, { volume: number; pan: number; mute: boolean; insertDelay: boolean; insertReverb: boolean; sendLevel: number; delaySend: number }>();
 
   set onLevel(cb: ((level: number) => void) | null) { this._onLevel = cb; }
 
   get synthInstance(): null { return null; }
-  get delayEnabled(): boolean { return this._delayEnabled; }
-  get reverbEnabled(): boolean { return this._reverbEnabled; }
   get isStarted(): boolean { return this._worklet !== null; }
 
-  setDelayEnabled(on: boolean): void {
-    this._delayEnabled = on;
-    this._worklet?.port.postMessage({ type: "fx", delay: on });
+  setChannelVolume(channelId: string, volume: number, pan: number, mute: boolean): void {
+    const st = this._channelStates.get(channelId) || { volume: 0.8, pan: 0, mute: false, insertDelay: false, insertReverb: false, sendLevel: 0, delaySend: 0 };
+    st.volume = volume; st.pan = pan; st.mute = mute;
+    this._channelStates.set(channelId, st);
+    this._worklet?.port.postMessage({ type: "channelFx", channelId, volume, pan, mute });
   }
-  setReverbEnabled(on: boolean): void {
-    this._reverbEnabled = on;
-    this._worklet?.port.postMessage({ type: "fx", reverb: on });
+
+  setChannelInsertFx(channelId: string, type: "delay" | "reverb", enabled: boolean, _wet: number): void {
+    void _wet;
+    const st = this._channelStates.get(channelId) || { volume: 0.8, pan: 0, mute: false, insertDelay: false, insertReverb: false, sendLevel: 0, delaySend: 0 };
+    if (type === "delay") st.insertDelay = enabled;
+    else st.insertReverb = enabled;
+    this._channelStates.set(channelId, st);
+    this._worklet?.port.postMessage({ type: "channelFx", channelId, insertDelay: st.insertDelay, insertReverb: st.insertReverb });
+  }
+
+  setChannelSendLevel(channelId: string, level: number): void {
+    const st = this._channelStates.get(channelId) || { volume: 0.8, pan: 0, mute: false, insertDelay: false, insertReverb: false, sendLevel: 0, delaySend: 0 };
+    st.sendLevel = level;
+    this._channelStates.set(channelId, st);
+    this._worklet?.port.postMessage({ type: "channelFx", channelId, sendLevel: level });
   }
 
   setConfig(config: Record<string, unknown>): void {
@@ -451,12 +505,12 @@ export class PolySynthOutputSingleton {
     this._worklet?.port.postMessage({ type: "metro", enabled, ppqn, beats: beatsPerBar });
   }
 
-  startScheduled(events: { tick: number; type: string; note: number; velocity: number }[], bpm: number, ppqn: number, startTick: number): void {
+  startScheduled(events: { tick: number; type: string; note: number; velocity: number; channelId: string }[], bpm: number, ppqn: number, startTick: number): void {
     this._worklet?.port.postMessage({ type: "events", events, bpm, ppqn, startTick });
   }
 
-  noteOn(note: number, velocity: number): void {
-    this._worklet?.port.postMessage({ type: "noteOn", note, vel: velocity });
+  noteOn(note: number, velocity: number, channelId?: string): void {
+    this._worklet?.port.postMessage({ type: "noteOn", note, vel: velocity, channelId: channelId ?? "" });
   }
   noteOff(note: number): void {
     this._worklet?.port.postMessage({ type: "noteOff", note });
@@ -565,7 +619,7 @@ export class PolySynthOutputSingleton {
 
 export const PolySynthOutput = (() => {
   const key = Symbol.for("kaeldaw.PolySynthOutput");
-  const g = globalThis as any;
+  const g = globalThis as { [key: symbol]: PolySynthOutputSingleton | undefined };
   if (g[key]) g[key].stop();
   return g[key] ?? (g[key] = new PolySynthOutputSingleton());
 })();

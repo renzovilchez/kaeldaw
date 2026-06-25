@@ -22,5 +22,6 @@ export function Fader({ value, min, max, width, height, label, onChange }: {
     if (height) el.setAttribute("height", String(height));
     if (label) el.setAttribute("label", label);
   });
-  return createElement("daw-fader", { ref, style: { display: "inline-block" } });
+  // eslint-disable-next-line react-hooks/refs
+  return createElement("daw-fader", { ref, style: { display: "inline-block" as const } });
 }

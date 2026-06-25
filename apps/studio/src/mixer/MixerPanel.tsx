@@ -1,15 +1,30 @@
 import { useRef, useEffect, createElement, memo } from "react";
 
+interface ChannelData {
+  id: string; name: string; volume: number; pan: number;
+  mute: boolean; solo: boolean; meterLevel: number;
+  insertDelay: boolean; insertReverb: boolean; sendLevel: number;
+}
+
+interface BusData {
+  id: string; name: string; type: string;
+  volume: number; pan: number; mute: boolean; meterLevel: number;
+}
+
 const MixerChannelItem = memo(function MixerChannelItem({
   channel, index,
   onVolumeChange, onPanChange, onToggleMute, onToggleSolo,
+  onInsertDelay, onInsertReverb, onSendLevel,
 }: {
-  channel: { id: string; name: string; volume: number; pan: number; mute: boolean; solo: boolean; meterLevel: number };
+  channel: ChannelData;
   index: number;
   onVolumeChange: (id: string, v: number) => void;
   onPanChange: (id: string, v: number) => void;
   onToggleMute: (id: string) => void;
   onToggleSolo: (id: string) => void;
+  onInsertDelay: (id: string, enabled: boolean) => void;
+  onInsertReverb: (id: string, enabled: boolean) => void;
+  onSendLevel: (id: string, level: number) => void;
 }) {
   const ref = useRef<HTMLElement>(null);
 
@@ -21,6 +36,9 @@ const MixerChannelItem = memo(function MixerChannelItem({
     el.setAttribute("volume", String(channel.volume));
     el.setAttribute("pan", String(channel.pan));
     el.setAttribute("meter-level", String(channel.meterLevel));
+    el.setAttribute("insert-delay", String(channel.insertDelay));
+    el.setAttribute("insert-reverb", String(channel.insertReverb));
+    el.setAttribute("send-level", String(channel.sendLevel));
     if (channel.mute) el.setAttribute("mute", "");
     else el.removeAttribute("mute");
     if (channel.solo) el.setAttribute("solo", "");
@@ -34,19 +52,29 @@ const MixerChannelItem = memo(function MixerChannelItem({
     const hPan = (e: Event) => onPanChange(channel.id, (e as CustomEvent).detail.pan);
     const hMute = () => onToggleMute(channel.id);
     const hSolo = () => onToggleSolo(channel.id);
+    const hDelay = (e: Event) => onInsertDelay(channel.id, (e as CustomEvent).detail.enabled);
+    const hReverb = (e: Event) => onInsertReverb(channel.id, (e as CustomEvent).detail.enabled);
+    const hSend = (e: Event) => onSendLevel(channel.id, (e as CustomEvent).detail.level);
     el.addEventListener("volume-change", hVolume);
     el.addEventListener("pan-change", hPan);
     el.addEventListener("toggle-mute", hMute);
     el.addEventListener("toggle-solo", hSolo);
+    el.addEventListener("insert-delay-change", hDelay);
+    el.addEventListener("insert-reverb-change", hReverb);
+    el.addEventListener("send-level-change", hSend);
     return () => {
       el.removeEventListener("volume-change", hVolume);
       el.removeEventListener("pan-change", hPan);
       el.removeEventListener("toggle-mute", hMute);
       el.removeEventListener("toggle-solo", hSolo);
+      el.removeEventListener("insert-delay-change", hDelay);
+      el.removeEventListener("insert-reverb-change", hReverb);
+      el.removeEventListener("send-level-change", hSend);
     };
-  }, [channel.id, onVolumeChange, onPanChange, onToggleMute, onToggleSolo]);
+  }, [channel.id, onVolumeChange, onPanChange, onToggleMute, onToggleSolo, onInsertDelay, onInsertReverb, onSendLevel]);
 
-  return createElement("daw-mixer-channel", { ref, style: { width: "52px", flexShrink: "0" as const } });
+  // eslint-disable-next-line react-hooks/refs
+  return createElement("daw-mixer-channel", { ref, style: { width: "60px", flexShrink: "0" as const } });
 });
 
 const MasterChannelItem = memo(function MasterChannelItem({
@@ -77,13 +105,54 @@ const MasterChannelItem = memo(function MasterChannelItem({
     return () => el.removeEventListener("volume-change", hVolume);
   }, [onVolumeChange]);
 
-  return createElement("daw-mixer-channel", { ref, style: { width: "52px", flexShrink: "0" as const } });
+  // eslint-disable-next-line react-hooks/refs
+  return createElement("daw-mixer-channel", { ref, style: { width: "60px", flexShrink: "0" as const } });
 });
 
-export function MixerPanel({ channels, masterVolume, masterMeterLevel,
+const BusChannelItem = memo(function BusChannelItem({
+  bus, onVolumeChange, onToggleMute,
+}: {
+  bus: BusData;
+  onVolumeChange: (id: string, v: number) => void;
+  onToggleMute: (id: string) => void;
+}) {
+  const ref = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.setAttribute("channel-name", bus.name);
+    el.setAttribute("channel-number", "B");
+    el.setAttribute("volume", String(bus.volume));
+    el.setAttribute("meter-level", String(bus.meterLevel));
+    if (bus.mute) el.setAttribute("mute", "");
+    else el.removeAttribute("mute");
+    el.removeAttribute("solo");
+  }, [bus]);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const hVolume = (e: Event) => onVolumeChange(bus.id, (e as CustomEvent).detail.volume);
+    const hMute = () => onToggleMute(bus.id);
+    el.addEventListener("volume-change", hVolume);
+    el.addEventListener("toggle-mute", hMute);
+    return () => {
+      el.removeEventListener("volume-change", hVolume);
+      el.removeEventListener("toggle-mute", hMute);
+    };
+  }, [bus.id, onVolumeChange, onToggleMute]);
+
+  // eslint-disable-next-line react-hooks/refs
+  return createElement("daw-mixer-channel", { ref, style: { width: "60px", flexShrink: "0" as const } });
+});
+
+export function MixerPanel({ channels, buses, masterVolume, masterMeterLevel,
   onVolumeChange, onPanChange, onToggleMute, onToggleSolo, onSetMasterVolume,
-  delayEnabled, reverbEnabled, onToggleDelay, onToggleReverb }: {
-  channels: { id: string; name: string; volume: number; pan: number; mute: boolean; solo: boolean; meterLevel: number }[];
+  onInsertDelay, onInsertReverb, onSendLevel,
+  onBusVolume, onToggleBusMute }: {
+  channels: ChannelData[];
+  buses: BusData[];
   masterVolume: number;
   masterMeterLevel: number;
   onVolumeChange: (id: string, v: number) => void;
@@ -91,10 +160,11 @@ export function MixerPanel({ channels, masterVolume, masterMeterLevel,
   onToggleMute: (id: string) => void;
   onToggleSolo: (id: string) => void;
   onSetMasterVolume: (v: number) => void;
-  delayEnabled: boolean;
-  reverbEnabled: boolean;
-  onToggleDelay: () => void;
-  onToggleReverb: () => void;
+  onInsertDelay: (id: string, enabled: boolean) => void;
+  onInsertReverb: (id: string, enabled: boolean) => void;
+  onSendLevel: (id: string, level: number) => void;
+  onBusVolume: (id: string, v: number) => void;
+  onToggleBusMute: (id: string) => void;
 }) {
   return (
     <div className="h-full bg-surface-alt flex flex-col">
@@ -108,24 +178,20 @@ export function MixerPanel({ channels, masterVolume, masterMeterLevel,
             onPanChange={onPanChange}
             onToggleMute={onToggleMute}
             onToggleSolo={onToggleSolo}
+            onInsertDelay={onInsertDelay}
+            onInsertReverb={onInsertReverb}
+            onSendLevel={onSendLevel}
           />
         ))}
       </div>
-      {/* FX controls row */}
-      <div className="border-t border-border px-2 py-1 flex items-center gap-1 justify-center shrink-0">
-        <button
-          className={`px-2 py-0.5 rounded text-[9px] font-bold transition-colors ${delayEnabled ? "bg-[#3b82f6] text-white" : "bg-[#4a4a4a] text-[#999] hover:bg-[#555]"}`}
-          onClick={onToggleDelay}
-          title={`Delay ${delayEnabled ? "ON" : "OFF"}`}
-        >D</button>
-        <button
-          className={`px-2 py-0.5 rounded text-[9px] font-bold transition-colors ${reverbEnabled ? "bg-[#3b82f6] text-white" : "bg-[#4a4a4a] text-[#999] hover:bg-[#555]"}`}
-          onClick={onToggleReverb}
-          title={`Reverb ${reverbEnabled ? "ON" : "OFF"}`}
-        >R</button>
-        <span className="text-[8px] text-[#666] ml-1">FX</span>
-      </div>
-      <div className="border-t border-border p-1 flex justify-center">
+      {buses.length > 0 && (
+        <div className="border-t border-border p-1 flex justify-center gap-0.5 shrink-0">
+          {buses.map((bus) => (
+            <BusChannelItem key={bus.id} bus={bus} onVolumeChange={onBusVolume} onToggleMute={onToggleBusMute} />
+          ))}
+        </div>
+      )}
+      <div className="border-t border-border p-1 flex justify-center shrink-0">
         <MasterChannelItem volume={masterVolume} meterLevel={masterMeterLevel} onVolumeChange={onSetMasterVolume} />
       </div>
     </div>

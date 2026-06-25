@@ -14,7 +14,8 @@ import { saveProjectFile, loadProjectFile } from "@kaeldaw/project/save-load";
 import { createDownloadLink, revokeDownloadLink } from "@kaeldaw/project/wav-export";
 import { renderProject } from "./export/renderProject";
 import type { ExportProgress } from "./export/renderProject";
-import { WindowManagerProvider, useWindowManager } from "./stores/WindowManager";
+import { WindowManagerProvider } from "./stores/WindowManager";
+import { useWindowManager } from "./stores/useWindowManager";
 import { TopBar } from "./layout/TopBar";
 import { TrackList } from "./tracks/TrackList";
 import { MixerPanel } from "./mixer/MixerPanel";
@@ -81,7 +82,9 @@ const TimelineWindow = memo(function TimelineWindow({ undoRefs, redoRefs }: { un
   useEffect(() => { handlersRef.current = { addClip, moveClip, resizeClip, trimClip, removeClip }; }, [addClip, moveClip, resizeClip, trimClip, removeClip]);
 
   // Register undo/redo for this context
+  // eslint-disable-next-line react-hooks/immutability
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/immutability
     undoRefs.current.timeline = () => {
       console.log("UNDO TIMELINE CALLED");
       const wc = elRef.current as any;
@@ -104,6 +107,7 @@ const TimelineWindow = memo(function TimelineWindow({ undoRefs, redoRefs }: { un
       const after = wc.getClips().map((c: any) => ({ id: c.id, pos: c.startTick }));
       console.log("UNDO TIMELINE: WC clips after restore:", JSON.stringify(after));
     };
+    // eslint-disable-next-line react-hooks/immutability
     redoRefs.current.timeline = () => {
       const wc = elRef.current as any;
       if (!wc) return;
@@ -243,7 +247,9 @@ const PianoRollWindow = memo(function PianoRollWindow({ undoRefs, redoRefs }: { 
   useEffect(() => { handlersRef.current = { addNote, moveNote, resizeNote, removeNote }; }, [addNote, moveNote, resizeNote, removeNote]);
 
   // Register undo/redo for this context
+  // eslint-disable-next-line react-hooks/immutability
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/immutability
     undoRefs.current.pianoRoll = () => {
       const wc = elRef.current as any;
       if (!wc) return;
@@ -260,6 +266,7 @@ const PianoRollWindow = memo(function PianoRollWindow({ undoRefs, redoRefs }: { 
         useMidiStore.getState().syncToClips();
       }
     };
+    // eslint-disable-next-line react-hooks/immutability
     redoRefs.current.pianoRoll = () => {
       const wc = elRef.current as any;
       if (!wc) return;
@@ -368,6 +375,7 @@ function AppInner() {
   const selectTrack = useTracksStore((s) => s.selectTrack);
   const selectedId = useTracksStore((s) => s.selectedId);
   const channels = useMixerStore((s) => s.channels);
+  const buses = useMixerStore((s) => s.buses);
   const addChannel = useMixerStore((s) => s.addChannel);
   const toggleMute = useMixerStore((s) => s.toggleMute);
   const toggleSolo = useMixerStore((s) => s.toggleSolo);
@@ -388,48 +396,51 @@ function AppInner() {
   const redoFnsRef = useRef<Record<UndoContext, UndoFn | null>>({ timeline: null, pianoRoll: null, mixer: null, tracks: null });
 
   // Register mixer and tracks undo/redo (these live in AppInner scope)
-  undoFnsRef.current.mixer = () => {
-    const state = useMixerStore.getState();
-    const snap = useUndoStore.getState().undo("mixer", () => ({
-      channels: state.channels.map((ch) => ({ ...ch })),
-      masterVolume: state.masterVolume,
-    }));
-    if (snap) {
-      const s = snap as { channels: any[]; masterVolume: number };
-      useMixerStore.setState({ channels: s.channels, masterVolume: s.masterVolume ?? 1 });
-    }
-  };
-  redoFnsRef.current.mixer = () => {
-    const state = useMixerStore.getState();
-    const snap = useUndoStore.getState().redo("mixer", () => ({
-      channels: state.channels.map((ch) => ({ ...ch })),
-      masterVolume: state.masterVolume,
-    }));
-    if (snap) {
-      const s = snap as { channels: any[]; masterVolume: number };
-      useMixerStore.setState({ channels: s.channels, masterVolume: s.masterVolume ?? 1 });
-    }
-  };
-  undoFnsRef.current.tracks = () => {
-    const state = useTracksStore.getState();
-    const snap = useUndoStore.getState().undo("tracks", () => ({
-      tracks: state.tracks.map((t) => ({ id: t.id, name: t.name, color: t.color, presetId: t.presetId })),
-    }));
-    if (snap) {
-      const s = snap as { tracks: { id: string; name: string; color: string; presetId: string }[] };
-      useTracksStore.setState({ tracks: s.tracks, selectedId: useTracksStore.getState().selectedId });
-    }
-  };
-  redoFnsRef.current.tracks = () => {
-    const state = useTracksStore.getState();
-    const snap = useUndoStore.getState().redo("tracks", () => ({
-      tracks: state.tracks.map((t) => ({ id: t.id, name: t.name, color: t.color, presetId: t.presetId })),
-    }));
-    if (snap) {
-      const s = snap as { tracks: { id: string; name: string; color: string; presetId: string }[] };
-      useTracksStore.setState({ tracks: s.tracks, selectedId: useTracksStore.getState().selectedId });
-    }
-  };
+  useEffect(() => {
+    undoFnsRef.current.mixer = () => {
+      const state = useMixerStore.getState();
+      const snap = useUndoStore.getState().undo("mixer", () => ({
+        channels: state.channels.map((ch) => ({ ...ch })),
+        masterVolume: state.masterVolume,
+      }));
+      if (snap) {
+        const s = snap as { channels: any[]; masterVolume: number };
+        useMixerStore.setState({ channels: s.channels, masterVolume: s.masterVolume ?? 1 });
+      }
+    };
+    redoFnsRef.current.mixer = () => {
+      const state = useMixerStore.getState();
+      const snap = useUndoStore.getState().redo("mixer", () => ({
+        channels: state.channels.map((ch) => ({ ...ch })),
+        masterVolume: state.masterVolume,
+      }));
+      if (snap) {
+        const s = snap as { channels: any[]; masterVolume: number };
+        useMixerStore.setState({ channels: s.channels, masterVolume: s.masterVolume ?? 1 });
+      }
+    };
+    undoFnsRef.current.tracks = () => {
+      const state = useTracksStore.getState();
+      const snap = useUndoStore.getState().undo("tracks", () => ({
+        tracks: state.tracks.map((t) => ({ id: t.id, name: t.name, color: t.color, presetId: t.presetId })),
+      }));
+      if (snap) {
+        const s = snap as { tracks: { id: string; name: string; color: string; presetId: string }[] };
+        useTracksStore.setState({ tracks: s.tracks, selectedId: useTracksStore.getState().selectedId });
+      }
+    };
+    redoFnsRef.current.tracks = () => {
+      const state = useTracksStore.getState();
+      const snap = useUndoStore.getState().redo("tracks", () => ({
+        tracks: state.tracks.map((t) => ({ id: t.id, name: t.name, color: t.color, presetId: t.presetId })),
+      }));
+      if (snap) {
+        const s = snap as { tracks: { id: string; name: string; color: string; presetId: string }[] };
+        useTracksStore.setState({ tracks: s.tracks, selectedId: useTracksStore.getState().selectedId });
+      }
+    };
+    return () => { undoFnsRef.current.mixer = null; redoFnsRef.current.mixer = null; undoFnsRef.current.tracks = null; redoFnsRef.current.tracks = null; };
+  }, []);
 
   const handleUndo = useCallback(() => {
     const ctx = useUndoStore.getState().focusedContext;
@@ -503,7 +514,7 @@ function AppInner() {
         if (cancelled) return;
 
         const clips = useClipsStore.getState().clips;
-        const events: { tick: number; type: string; note: number; velocity: number }[] = [];
+        const events: { tick: number; type: string; note: number; velocity: number; channelId: string }[] = [];
         for (const clip of clips) {
           const offset = clip.startOffset ?? 0;
           const clipStart = clip.startTick;
@@ -514,8 +525,8 @@ function AppInner() {
             const clampedStart = Math.max(clipStart, noteAbsStart);
             const clampedEnd = Math.min(clipEnd, noteAbsEnd);
             if (clampedStart < clampedEnd) {
-              events.push({ tick: clampedStart * VISUAL_TO_PPQN, type: "on", note: n.note, velocity: n.velocity });
-              events.push({ tick: clampedEnd * VISUAL_TO_PPQN, type: "off", note: n.note, velocity: 0 });
+              events.push({ tick: clampedStart * VISUAL_TO_PPQN, type: "on", note: n.note, velocity: n.velocity, channelId: clip.trackId });
+              events.push({ tick: clampedEnd * VISUAL_TO_PPQN, type: "off", note: n.note, velocity: 0, channelId: clip.trackId });
             }
           }
         }
@@ -599,18 +610,24 @@ function AppInner() {
     mixerExec(() => setMasterVolume(v));
   }, [setMasterVolume]);
 
-  const [delayEnabled, setDelayEnabled] = useState(false);
-  const [reverbEnabled, setReverbEnabled] = useState(false);
-  const toggleDelay = () => {
-    const next = !delayEnabled;
-    setDelayEnabled(next);
-    PolySynthOutput.setDelayEnabled(next);
-  };
-  const toggleReverb = () => {
-    const next = !reverbEnabled;
-    setReverbEnabled(next);
-    PolySynthOutput.setReverbEnabled(next);
-  };
+  const handleInsertDelay = useCallback((channelId: string, enabled: boolean) => {
+    mixerExec(() => useMixerStore.getState().setInsertFxEnabled(channelId, 0, enabled));
+    PolySynthOutput.setChannelInsertFx(channelId, "delay", enabled, 0.3);
+  }, [mixerExec]);
+  const handleInsertReverb = useCallback((channelId: string, enabled: boolean) => {
+    mixerExec(() => useMixerStore.getState().setInsertFxEnabled(channelId, 1, enabled));
+    PolySynthOutput.setChannelInsertFx(channelId, "reverb", enabled, 0.3);
+  }, [mixerExec]);
+  const handleSendLevel = useCallback((channelId: string, level: number) => {
+    mixerExec(() => useMixerStore.getState().setSendLevel(channelId, "reverb-bus", level));
+    PolySynthOutput.setChannelSendLevel(channelId, level);
+  }, [mixerExec]);
+  const handleBusVolume = useCallback((busId: string, volume: number) => {
+    mixerExec(() => useMixerStore.getState().setBusVolume(busId, volume));
+  }, [mixerExec]);
+  const handleToggleBusMute = useCallback((busId: string) => {
+    mixerExec(() => useMixerStore.getState().toggleBusMute(busId));
+  }, [mixerExec]);
 
   const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
 
@@ -661,7 +678,13 @@ function AppInner() {
 
         <FloatingWindow id="mixer" sidebarWidth={sidebarWidth} onFocus={(id) => { const ctx = WINDOW_TO_CTX[id]; if (ctx) setFocusedContext(ctx); }}>
           <MixerPanel
-            channels={channels}
+            channels={channels.map((ch) => ({
+              ...ch,
+              insertDelay: ch.insertFx?.[0]?.enabled ?? false,
+              insertReverb: ch.insertFx?.[1]?.enabled ?? false,
+              sendLevel: ch.sends?.find((s) => s.busId === "reverb-bus")?.level ?? 0,
+            }))}
+            buses={buses.map((b) => ({ ...b }))}
             masterVolume={masterVolume}
             masterMeterLevel={masterMeterLevel}
             onVolumeChange={handleVolumeChange}
@@ -669,10 +692,11 @@ function AppInner() {
             onToggleMute={handleToggleMute}
             onToggleSolo={handleToggleSolo}
             onSetMasterVolume={handleSetMasterVolume}
-            delayEnabled={delayEnabled}
-            reverbEnabled={reverbEnabled}
-            onToggleDelay={toggleDelay}
-            onToggleReverb={toggleReverb}
+            onInsertDelay={handleInsertDelay}
+            onInsertReverb={handleInsertReverb}
+            onSendLevel={handleSendLevel}
+            onBusVolume={handleBusVolume}
+            onToggleBusMute={handleToggleBusMute}
           />
         </FloatingWindow>
 

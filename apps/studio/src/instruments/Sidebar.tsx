@@ -1,4 +1,4 @@
-import { useWindowManager } from "../stores/WindowManager";
+import { useWindowManager } from "../stores/useWindowManager";
 
 export function Sidebar({ width, onResize }: { width: number; onResize: (w: number) => void }) {
   const { open } = useWindowManager();

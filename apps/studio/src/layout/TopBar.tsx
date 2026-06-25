@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { useTransportStore } from "@kaeldaw/project/useTransportStore";
 import { useUndoStore } from "@kaeldaw/project/useUndoStore";
-import { useWindowManager } from "../stores/WindowManager";
+import { useWindowManager } from "../stores/useWindowManager";
 
 const MIN_BEATS = 1,
   MAX_BEATS = 32;

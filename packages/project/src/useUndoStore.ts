@@ -2,6 +2,14 @@ import { create } from "zustand";
 
 export type UndoContext = "timeline" | "pianoRoll" | "mixer" | "tracks";
 
+interface UndoSnapshot {
+  clips?: { length: number };
+  notes?: { length: number };
+  tracks?: unknown[];
+  channels?: unknown[];
+  masterVolume?: number;
+}
+
 const MAX_HISTORY = 50;
 
 function makeFlags(): Record<UndoContext, boolean> {
@@ -59,9 +67,9 @@ export const useUndoStore = create<UndoStore>((set) => ({
   },
 
   executeAction: (context, getSnapshot) => {
-    const snap = getSnapshot();
-    if (context === "timeline") console.log("executeAction timeline - clips guardados:", (snap as any)?.clips?.length, "items");
-    if (context === "pianoRoll") console.log("executeAction pianoRoll - notes guardadas:", (snap as any)?.notes?.length, "items");
+    const snap = getSnapshot() as UndoSnapshot;
+    if (context === "timeline") console.log("executeAction timeline - clips guardados:", snap?.clips?.length, "items");
+    if (context === "pianoRoll") console.log("executeAction pianoRoll - notes guardadas:", snap?.notes?.length, "items");
     history[context].push(snap);
     if (history[context].length > MAX_HISTORY) history[context].shift();
     redoStack[context] = [];
@@ -71,15 +79,14 @@ export const useUndoStore = create<UndoStore>((set) => ({
   undo: (context, getCurrentState) => {
     const stack = history[context];
     if (stack.length === 0) { console.log(`undo ${context}: sin historial`); return null; }
-    const snapshot = stack.pop()!;
-    const current = getCurrentState();
+    const snapshot = stack.pop() as UndoSnapshot;
+    const current = getCurrentState() as UndoSnapshot;
     if (context === "timeline") {
-      const s = snapshot as any;
-      console.log("undo timeline - snapshot clips:", s?.clips?.length, "items - IDs:", s?.clips?.map((c: any) => c.id));
-      console.log("undo timeline - current clips:", (current as any)?.clips?.length, "items");
+      console.log("undo timeline - snapshot clips:", snapshot?.clips?.length, "items");
+      console.log("undo timeline - current clips:", current?.clips?.length, "items");
     }
     if (context === "pianoRoll") {
-      console.log("undo pianoRoll - snapshot notes:", (snapshot as any)?.notes?.length, "- current notes:", (current as any)?.notes?.length);
+      console.log("undo pianoRoll - snapshot notes:", snapshot?.notes?.length, "- current notes:", current?.notes?.length);
     }
     redoStack[context].push(current);
     updateFlags(set);
@@ -89,10 +96,10 @@ export const useUndoStore = create<UndoStore>((set) => ({
   redo: (context, getCurrentState) => {
     const stack = redoStack[context];
     if (stack.length === 0) { console.log(`redo ${context}: sin historial`); return null; }
-    const snapshot = stack.pop()!;
-    const current = getCurrentState();
-    if (context === "timeline") console.log("redo timeline - restoring clips:", (snapshot as any)?.clips?.length, "items");
-    if (context === "pianoRoll") console.log("redo pianoRoll - restoring notes:", (snapshot as any)?.notes?.length, "items");
+    const snapshot = stack.pop() as UndoSnapshot;
+    const current = getCurrentState() as UndoSnapshot;
+    if (context === "timeline") console.log("redo timeline - restoring clips:", snapshot?.clips?.length, "items");
+    if (context === "pianoRoll") console.log("redo pianoRoll - restoring notes:", snapshot?.notes?.length, "items");
     history[context].push(current);
     updateFlags(set);
     return snapshot;

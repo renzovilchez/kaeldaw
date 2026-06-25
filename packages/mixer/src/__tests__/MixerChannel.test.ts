@@ -40,6 +40,10 @@ function createChannel(): MixerChannel {
   return el;
 }
 
+function buttons(ch: MixerChannel): HTMLButtonElement[] {
+  return Array.from(ch.querySelectorAll("button"));
+}
+
 describe("MixerChannel", () => {
   it("esta registrado como custom element", () => {
     const Ctor = customElements.get("daw-mixer-channel");
@@ -49,17 +53,17 @@ describe("MixerChannel", () => {
   it("renderiza nombre del canal", () => {
     const ch = createChannel();
     ch.channelName = "Kick";
-    const nameEl = ch.querySelector("span");
-    expect(nameEl).not.toBeNull();
-    expect(nameEl!.textContent).toBe("Kick");
+    const spans = ch.querySelectorAll("span");
+    expect(spans.length).toBeGreaterThan(1);
+    expect(spans[1].textContent).toBe("Kick");
   });
 
   it("channel-name attribute se refleja en el span", () => {
     const ch = createChannel();
     ch.setAttribute("channel-name", "Snare");
     expect(ch.channelName).toBe("Snare");
-    const nameEl = ch.querySelector("span");
-    expect(nameEl!.textContent).toBe("Snare");
+    const spans = ch.querySelectorAll("span");
+    expect(spans[1].textContent).toBe("Snare");
   });
 
   it("volume se clamp entre 0 y 1", () => {
@@ -78,21 +82,20 @@ describe("MixerChannel", () => {
     expect(fader!.getAttribute("value")).toBe("500");
   });
 
-  it("mute attr muestra boton con fondo rojo", () => {
+  it("mute attr muestra boton M con fondo rojo (primer button)", () => {
     const ch = createChannel();
     ch.setAttribute("mute", "");
     expect(ch.mute).toBe(true);
-    const btns = ch.querySelectorAll("button");
-    const muteBtn = btns[2];
-    expect(muteBtn!.style.background).toBe("rgb(220, 38, 38)");
+    const btns = buttons(ch);
+    expect(btns[0].style.background).toBe("rgb(220, 38, 38)");
   });
 
-  it("solo attr muestra boton con fondo amarillo", () => {
+  it("solo attr muestra boton S con fondo amarillo (segundo button)", () => {
     const ch = createChannel();
     ch.setAttribute("solo", "");
     expect(ch.solo).toBe(true);
-    const btns = ch.querySelectorAll("button");
-    expect(btns[3].style.background).toBe("rgb(202, 138, 4)");
+    const btns = buttons(ch);
+    expect(btns[1].style.background).toBe("rgb(202, 138, 4)");
   });
 
   it("click mute button emite toggle-mute", () => {
@@ -100,8 +103,7 @@ describe("MixerChannel", () => {
     ch.channelId = "ch-1";
     const handler = vi.fn();
     ch.addEventListener("toggle-mute", handler);
-    const btns = ch.querySelectorAll("button");
-    btns[2].click();
+    buttons(ch)[0].click();
     expect(handler).toHaveBeenCalledTimes(1);
     expect(handler.mock.calls[0][0].detail).toMatchObject({ channelId: "ch-1", mute: true });
   });
@@ -111,18 +113,59 @@ describe("MixerChannel", () => {
     ch.channelId = "ch-1";
     const handler = vi.fn();
     ch.addEventListener("toggle-solo", handler);
-    const btns = ch.querySelectorAll("button");
-    btns[3].click();
+    buttons(ch)[1].click();
     expect(handler).toHaveBeenCalledTimes(1);
     expect(handler.mock.calls[0][0].detail).toMatchObject({ channelId: "ch-1", solo: true });
+  });
+
+  it("click D button emite insert-delay-change", () => {
+    const ch = createChannel();
+    ch.channelId = "ch-1";
+    const handler = vi.fn();
+    ch.addEventListener("insert-delay-change", handler);
+    buttons(ch)[2].click();
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler.mock.calls[0][0].detail).toMatchObject({ channelId: "ch-1", enabled: true });
+  });
+
+  it("click R button emite insert-reverb-change", () => {
+    const ch = createChannel();
+    ch.channelId = "ch-1";
+    const handler = vi.fn();
+    ch.addEventListener("insert-reverb-change", handler);
+    buttons(ch)[3].click();
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler.mock.calls[0][0].detail).toMatchObject({ channelId: "ch-1", enabled: true });
+  });
+
+  it("insert-delay attr activa boton azul", () => {
+    const ch = createChannel();
+    ch.setAttribute("insert-delay", "true");
+    expect(ch.insertDelay).toBe(true);
+    expect(buttons(ch)[2].style.background).toBe("rgb(59, 130, 246)");
+  });
+
+  it("insert-reverb attr activa boton azul", () => {
+    const ch = createChannel();
+    ch.setAttribute("insert-reverb", "true");
+    expect(ch.insertReverb).toBe(true);
+    expect(buttons(ch)[3].style.background).toBe("rgb(59, 130, 246)");
   });
 
   it("pan attr setea valor en knob interno", () => {
     const ch = createChannel();
     ch.setAttribute("pan", "1");
-    const knob = ch.querySelector("daw-knob");
-    expect(knob).not.toBeNull();
-    expect(knob!.getAttribute("value")).toBe("1000");
+    const knobs = ch.querySelectorAll("daw-knob");
+    expect(knobs.length).toBeGreaterThanOrEqual(2);
+    expect(knobs[1].getAttribute("value")).toBe("1000");
+  });
+
+  it("send-level attr setea valor en send knob", () => {
+    const ch = createChannel();
+    ch.setAttribute("send-level", "0.5");
+    expect(ch.sendLevel).toBe(0.5);
+    const knobs = ch.querySelectorAll("daw-knob");
+    expect(knobs[0].getAttribute("value")).toBe("500");
   });
 
   it("meterLevel actualiza barra VU", () => {
@@ -150,6 +193,17 @@ describe("MixerChannel", () => {
     fader.dispatchEvent(new CustomEvent("input", { detail: { value: 800 } }));
     expect(handler).toHaveBeenCalledTimes(1);
     expect(handler.mock.calls[0][0].detail).toMatchObject({ channelId: "ch-1", volume: 0.8 });
+  });
+
+  it("send knob input emite send-level-change", () => {
+    const ch = createChannel();
+    ch.channelId = "ch-1";
+    const handler = vi.fn();
+    ch.addEventListener("send-level-change", handler);
+    const knobs = ch.querySelectorAll("daw-knob");
+    knobs[0].dispatchEvent(new CustomEvent("input", { detail: { value: 500 } }));
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler.mock.calls[0][0].detail).toMatchObject({ channelId: "ch-1", level: 0.5 });
   });
 
   it("disconnectedCallback limpia listeners y no crashea", () => {

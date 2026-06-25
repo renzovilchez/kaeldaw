@@ -1,8 +1,9 @@
-import { createContext, useContext, useReducer, useCallback, useMemo, useEffect, useRef, type ReactNode } from "react";
+import { useReducer, useCallback, useMemo, useEffect, useRef, type ReactNode } from "react";
+import { Ctx } from "./WindowManagerContext";
 
-type WindowId = "timeline" | "piano-roll" | "mixer" | "tracks" | "waveform" | "synth-editor";
+export type WindowId = "timeline" | "piano-roll" | "mixer" | "tracks" | "waveform" | "synth-editor";
 
-type WindowState = {
+export type WindowState = {
   id: WindowId;
   title: string;
   isOpen: boolean;
@@ -13,7 +14,7 @@ type WindowState = {
   zIndex: number;
 };
 
-type State = {
+export type State = {
   nextZ: number;
   windows: Record<WindowId, WindowState>;
 };
@@ -111,18 +112,6 @@ function reducer(state: State, action: Action): State {
   }
 }
 
-const Ctx = createContext<{
-  state: State;
-  open: (id: WindowId) => void;
-  close: (id: WindowId) => void;
-  toggle: (id: WindowId) => void;
-  toggleMaximize: (id: WindowId) => void;
-  toggleMinimize: (id: WindowId) => void;
-  bringToFront: (id: WindowId) => void;
-  move: (id: WindowId, x: number, y: number) => void;
-  resize: (id: WindowId, w: number, h: number) => void;
-} | null>(null);
-
 export function WindowManagerProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined, buildInitialState);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -188,10 +177,4 @@ export function WindowManagerProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export function useWindowManager() {
-  const ctx = useContext(Ctx);
-  if (!ctx) throw new Error("useWindowManager needs WindowManagerProvider");
-  return ctx;
-}
 
-export type { WindowId, State, WindowState };

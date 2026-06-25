@@ -7,6 +7,9 @@ export class MixerChannel extends HTMLElement {
   private _solo = false;
   private _meterLevel = 0;
   private _channelId = "";
+  private _insertDelay = false;
+  private _insertReverb = false;
+  private _sendLevel = 0;
 
   private _numEl: HTMLSpanElement | null = null;
   private _nameEl: HTMLSpanElement | null = null;
@@ -15,25 +18,35 @@ export class MixerChannel extends HTMLElement {
   private _fader: HTMLElement | null = null;
   private _muteBtn: HTMLButtonElement | null = null;
   private _soloBtn: HTMLButtonElement | null = null;
+  private _delayBtn: HTMLButtonElement | null = null;
+  private _reverbBtn: HTMLButtonElement | null = null;
   private _panKnob: HTMLElement | null = null;
+  private _sendKnob: HTMLElement | null = null;
   private _volLabel: HTMLDivElement | null = null;
   private _panLabel: HTMLSpanElement | null = null;
+  private _sendLabel: HTMLSpanElement | null = null;
 
   private _onFaderInput: (e: Event) => void;
   private _onPanInput: (e: Event) => void;
+  private _onSendInput: (e: Event) => void;
   private _onMuteClick: () => void;
   private _onSoloClick: () => void;
+  private _onDelayClick: () => void;
+  private _onReverbClick: () => void;
 
   static get observedAttributes() {
-    return ["channel-name", "channel-number", "volume", "pan", "mute", "solo", "meter-level", "channel-id"];
+    return ["channel-name", "channel-number", "volume", "pan", "mute", "solo", "meter-level", "channel-id", "insert-delay", "insert-reverb", "send-level"];
   }
 
   constructor() {
     super();
     this._onFaderInput = this._handleFaderInput.bind(this);
     this._onPanInput = this._handlePanInput.bind(this);
+    this._onSendInput = this._handleSendInput.bind(this);
     this._onMuteClick = this._handleMuteClick.bind(this);
     this._onSoloClick = this._handleSoloClick.bind(this);
+    this._onDelayClick = this._handleDelayClick.bind(this);
+    this._onReverbClick = this._handleReverbClick.bind(this);
   }
 
   connectedCallback() {
@@ -43,8 +56,11 @@ export class MixerChannel extends HTMLElement {
   disconnectedCallback() {
     this._fader?.removeEventListener("input", this._onFaderInput);
     this._panKnob?.removeEventListener("input", this._onPanInput);
+    this._sendKnob?.removeEventListener("input", this._onSendInput);
     this._muteBtn?.removeEventListener("click", this._onMuteClick);
     this._soloBtn?.removeEventListener("click", this._onSoloClick);
+    this._delayBtn?.removeEventListener("click", this._onDelayClick);
+    this._reverbBtn?.removeEventListener("click", this._onReverbClick);
   }
 
   attributeChangedCallback(name: string, oldVal: string | null, newVal: string | null) {
@@ -58,6 +74,9 @@ export class MixerChannel extends HTMLElement {
       case "solo": this.solo = newVal !== null; break;
       case "meter-level": this.meterLevel = Number(newVal) || 0; break;
       case "channel-id": this.channelId = newVal ?? ""; break;
+      case "insert-delay": this.insertDelay = newVal === "true"; break;
+      case "insert-reverb": this.insertReverb = newVal === "true"; break;
+      case "send-level": this.sendLevel = Number(newVal) || 0; break;
     }
   }
 
@@ -114,40 +133,57 @@ export class MixerChannel extends HTMLElement {
   get channelId(): string { return this._channelId; }
   set channelId(v: string) { this._channelId = v; }
 
-  private _buildUI() {
-    this.style.cssText = "display:inline-flex;flex-direction:column;align-items:center;width:52px;padding:2px 3px;gap:1px;background:#353535;border-radius:4px;border:1px solid #4a4a4a";
+  get insertDelay(): boolean { return this._insertDelay; }
+  set insertDelay(v: boolean) {
+    this._insertDelay = v;
+    this._updateDelayBtn();
+  }
 
-    // Number
+  get insertReverb(): boolean { return this._insertReverb; }
+  set insertReverb(v: boolean) {
+    this._insertReverb = v;
+    this._updateReverbBtn();
+  }
+
+  get sendLevel(): number { return this._sendLevel; }
+  set sendLevel(v: number) {
+    this._sendLevel = Math.max(0, Math.min(1, v));
+    if (this._sendKnob) {
+      this._sendKnob.setAttribute("value", String(Math.round(this._sendLevel * 1000)));
+    }
+    if (this._sendLabel) {
+      this._sendLabel.textContent = this._sendLevel > 0 ? `${Math.round(this._sendLevel * 100)}%` : "Off";
+    }
+  }
+
+  private _buildUI() {
+    this.style.cssText = "display:inline-flex;flex-direction:column;align-items:center;width:60px;padding:2px 3px;gap:1px;background:#353535;border-radius:4px;border:1px solid #4a4a4a";
+
     this._numEl = document.createElement("span");
     this._numEl.style.cssText = "font-size:9px;color:#666;text-align:center;width:100%;line-height:12px;font-weight:600";
     this._numEl.textContent = this._channelNumber;
     this.appendChild(this._numEl);
 
-    // Name
     this._nameEl = document.createElement("span");
     this._nameEl.style.cssText = "font-size:7px;color:#aaa;text-align:center;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:10px;margin-bottom:1px";
     this._nameEl.textContent = this._channelName;
     this.appendChild(this._nameEl);
 
-    // Separator
     const sep = document.createElement("div");
     sep.style.cssText = "width:80%;height:1px;background:#4a4a4a;margin:1px 0";
     this.appendChild(sep);
 
-    // VU Meter vertical bar (fills from bottom)
     const vuContainer = document.createElement("div");
     vuContainer.style.cssText = "width:100%;height:35px;background:#2a2a2a;border-radius:2px;overflow:hidden;position:relative;border:1px solid #444";
     this._vuFill = document.createElement("div");
     this._vuFill.style.cssText = "position:absolute;bottom:0;left:0;width:100%;height:0%;border-radius:1px;transition:height 40ms";
     vuContainer.appendChild(this._vuFill);
-    // Peak hold dot
     this._vuPeak = document.createElement("div");
     this._vuPeak.style.cssText = "position:absolute;bottom:0;left:0;width:100%;height:2px;background:#fff;transition:bottom 100ms";
     vuContainer.appendChild(this._vuPeak);
     this.appendChild(vuContainer);
     this._updateVU();
 
-    // Fader
     this._fader = document.createElement("daw-fader");
     this._fader.setAttribute("min", "0");
     this._fader.setAttribute("max", "1000");
@@ -158,16 +194,29 @@ export class MixerChannel extends HTMLElement {
     this._fader.addEventListener("input", this._onFaderInput);
     this.appendChild(this._fader);
 
-    // Volume % label
     this._volLabel = document.createElement("div");
     this._volLabel.style.cssText = "font-size:7px;color:#888;line-height:10px";
     this._volLabel.textContent = `${Math.round(this._volume * 100)}%`;
     this.appendChild(this._volLabel);
 
-    // Pan knob row
+    const sendRow = document.createElement("div");
+    sendRow.style.cssText = "display:flex;align-items:center;justify-content:center;width:100%;gap:2px";
+    this._sendKnob = document.createElement("daw-knob");
+    this._sendKnob.setAttribute("min", "0");
+    this._sendKnob.setAttribute("max", "1000");
+    this._sendKnob.setAttribute("step", "10");
+    this._sendKnob.setAttribute("size", "16");
+    this._sendKnob.setAttribute("value", String(Math.round(this._sendLevel * 1000)));
+    this._sendKnob.addEventListener("input", this._onSendInput);
+    sendRow.appendChild(this._sendKnob);
+    this._sendLabel = document.createElement("span");
+    this._sendLabel.style.cssText = "font-size:6px;color:#666;width:20px;display:inline-block;text-align:center";
+    this._sendLabel.textContent = this._sendLevel > 0 ? `${Math.round(this._sendLevel * 100)}%` : "Off";
+    sendRow.appendChild(this._sendLabel);
+    this.appendChild(sendRow);
+
     const panRow = document.createElement("div");
     panRow.style.cssText = "display:flex;align-items:center;justify-content:center;width:100%";
-
     this._panKnob = document.createElement("daw-knob");
     this._panKnob.setAttribute("min", "0");
     this._panKnob.setAttribute("max", "1000");
@@ -176,33 +225,44 @@ export class MixerChannel extends HTMLElement {
     this._panKnob.setAttribute("value", String(Math.round((this._pan + 1) / 2 * 1000)));
     this._panKnob.addEventListener("input", this._onPanInput);
     panRow.appendChild(this._panKnob);
-
     this._panLabel = document.createElement("span");
     this._panLabel.style.cssText = "font-size:6px;color:#666;width:18px;display:inline-block;text-align:center";
     this._panLabel.textContent = this._panText();
     panRow.appendChild(this._panLabel);
-
     this.appendChild(panRow);
 
-    // M S row
-    const msRow = document.createElement("div");
-    msRow.style.cssText = "display:flex;gap:1px;width:100%";
+    const msdrRow = document.createElement("div");
+    msdrRow.style.cssText = "display:flex;gap:1px;width:100%";
 
     this._muteBtn = document.createElement("button");
     this._muteBtn.textContent = "M";
     this._muteBtn.style.cssText = "flex:1;height:14px;font-size:7px;font-weight:bold;border:none;border-radius:1px;cursor:pointer";
     this._updateMuteBtn();
     this._muteBtn.addEventListener("click", this._onMuteClick);
-    msRow.appendChild(this._muteBtn);
+    msdrRow.appendChild(this._muteBtn);
 
     this._soloBtn = document.createElement("button");
     this._soloBtn.textContent = "S";
     this._soloBtn.style.cssText = "flex:1;height:14px;font-size:7px;font-weight:bold;border:none;border-radius:1px;cursor:pointer";
     this._updateSoloBtn();
     this._soloBtn.addEventListener("click", this._onSoloClick);
-    msRow.appendChild(this._soloBtn);
+    msdrRow.appendChild(this._soloBtn);
 
-    this.appendChild(msRow);
+    this._delayBtn = document.createElement("button");
+    this._delayBtn.textContent = "D";
+    this._delayBtn.style.cssText = "flex:1;height:14px;font-size:7px;font-weight:bold;border:none;border-radius:1px;cursor:pointer";
+    this._updateDelayBtn();
+    this._delayBtn.addEventListener("click", this._onDelayClick);
+    msdrRow.appendChild(this._delayBtn);
+
+    this._reverbBtn = document.createElement("button");
+    this._reverbBtn.textContent = "R";
+    this._reverbBtn.style.cssText = "flex:1;height:14px;font-size:7px;font-weight:bold;border:none;border-radius:1px;cursor:pointer";
+    this._updateReverbBtn();
+    this._reverbBtn.addEventListener("click", this._onReverbClick);
+    msdrRow.appendChild(this._reverbBtn);
+
+    this.appendChild(msdrRow);
   }
 
   private _panText(): string {
@@ -220,6 +280,18 @@ export class MixerChannel extends HTMLElement {
     if (!this._soloBtn) return;
     this._soloBtn.style.background = this._solo ? "#ca8a04" : "#3a3a3a";
     this._soloBtn.style.color = this._solo ? "#fff" : "#888";
+  }
+
+  private _updateDelayBtn() {
+    if (!this._delayBtn) return;
+    this._delayBtn.style.background = this._insertDelay ? "#3b82f6" : "#3a3a3a";
+    this._delayBtn.style.color = this._insertDelay ? "#fff" : "#888";
+  }
+
+  private _updateReverbBtn() {
+    if (!this._reverbBtn) return;
+    this._reverbBtn.style.background = this._insertReverb ? "#3b82f6" : "#3a3a3a";
+    this._reverbBtn.style.color = this._insertReverb ? "#fff" : "#888";
   }
 
   private _updateVU() {
@@ -256,6 +328,15 @@ export class MixerChannel extends HTMLElement {
     }));
   }
 
+  private _handleSendInput(e: Event) {
+    const value = (e as CustomEvent).detail.value;
+    this._sendLevel = Math.max(0, Math.min(1, value / 1000));
+    if (this._sendLabel) this._sendLabel.textContent = this._sendLevel > 0 ? `${Math.round(this._sendLevel * 100)}%` : "Off";
+    this.dispatchEvent(new CustomEvent("send-level-change", {
+      detail: { channelId: this._channelId, level: this._sendLevel },
+    }));
+  }
+
   private _handleMuteClick() {
     this._mute = !this._mute;
     this._updateMuteBtn();
@@ -269,6 +350,22 @@ export class MixerChannel extends HTMLElement {
     this._updateSoloBtn();
     this.dispatchEvent(new CustomEvent("toggle-solo", {
       detail: { channelId: this._channelId, solo: this._solo },
+    }));
+  }
+
+  private _handleDelayClick() {
+    this._insertDelay = !this._insertDelay;
+    this._updateDelayBtn();
+    this.dispatchEvent(new CustomEvent("insert-delay-change", {
+      detail: { channelId: this._channelId, enabled: this._insertDelay },
+    }));
+  }
+
+  private _handleReverbClick() {
+    this._insertReverb = !this._insertReverb;
+    this._updateReverbBtn();
+    this.dispatchEvent(new CustomEvent("insert-reverb-change", {
+      detail: { channelId: this._channelId, enabled: this._insertReverb },
     }));
   }
 }

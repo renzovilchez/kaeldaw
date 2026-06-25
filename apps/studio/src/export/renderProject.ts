@@ -3,7 +3,6 @@ import { useClipsStore } from "@kaeldaw/project/useClipsStore";
 import { useMixerStore, type MixerChannel } from "@kaeldaw/project/useMixerStore";
 import { Transport } from "@kaeldaw/audio-engine/Transport";
 import { initWasmEffects, getDspModule, createWasmDelay, setWasmDelay, processWasmDelay, freeWasmDelay, createWasmReverb, setWasmReverb, processWasmReverb, freeWasmReverb } from "@kaeldaw/audio-engine/WasmEffects";
-import { PolySynthOutput } from "@kaeldaw/instruments/PolySynthOutput";
 
 export type ExportProgress = { percent: number; stage: string };
 
@@ -13,6 +12,33 @@ interface MidiEvent {
   velocity: number;
   type: "on" | "off";
   trackId: string;
+}
+
+function createDelay(sr: number) {
+  const h = createWasmDelay(sr, 2);
+  setWasmDelay(h, 0.3, 0.4, 0.3);
+  return h;
+}
+
+function createReverb(sr: number) {
+  const h = createWasmReverb(sr);
+  setWasmReverb(h, 0.5, 0.3, 0.5);
+  return h;
+}
+
+function processFxOnBuffer(buf: Float32Array, sr: number, insertDelay: boolean, insertReverb: boolean, totalSamples: number): void {
+  let dh = -1, rh = -1;
+  if (insertDelay) dh = createDelay(sr);
+  if (insertReverb) rh = createReverb(sr);
+  for (let i = 0; i < totalSamples; i++) {
+    let m = (buf[i * 2] + buf[i * 2 + 1]) * 0.5;
+    if (dh >= 0) m = processWasmDelay(dh, m);
+    if (rh >= 0) m = processWasmReverb(rh, m);
+    buf[i * 2] += m * 0.5;
+    buf[i * 2 + 1] += m * 0.5;
+  }
+  if (dh >= 0) freeWasmDelay(dh);
+  if (rh >= 0) freeWasmReverb(rh);
 }
 
 export async function renderProject(
@@ -31,12 +57,12 @@ export async function renderProject(
 
   const clips = useClipsStore.getState().clips;
   const channels = useMixerStore.getState().channels;
+  const buses = useMixerStore.getState().buses;
   const masterVolume = useMixerStore.getState().masterVolume;
   const bpm = Transport.bpm;
   const sr = sampleRate;
   const ppqn = Transport.ppqn;
 
-  // Build channel map: trackId → MixerChannel
   const channelMap = new Map<string, MixerChannel>();
   for (const ch of channels) {
     channelMap.set(ch.id, ch);
@@ -45,7 +71,6 @@ export async function renderProject(
 const TICKS_PER_BEAT_VISUAL = 24;
 const VISUAL_TO_PPQN = Transport.ppqn / TICKS_PER_BEAT_VISUAL;
 
-  // Collect all MIDI events with trackId
   const events: MidiEvent[] = [];
   for (const clip of clips) {
     const ch = channelMap.get(clip.trackId);
@@ -70,11 +95,9 @@ const VISUAL_TO_PPQN = Transport.ppqn / TICKS_PER_BEAT_VISUAL;
     return { master: masterBlob, tracks: new Map(), duration: 0, sampleRate: sr };
   }
 
-  // Solo logic: if any channel has solo, only those channels play
   const soloChannels = new Set(channels.filter((ch) => ch.solo).map((ch) => ch.id));
   const hasSolo = soloChannels.size > 0;
 
-  // Group events by trackId → per-channel synth
   const trackEvents = new Map<string, MidiEvent[]>();
   for (const ev of events) {
     if (hasSolo && !soloChannels.has(ev.trackId)) continue;
@@ -84,28 +107,25 @@ const VISUAL_TO_PPQN = Transport.ppqn / TICKS_PER_BEAT_VISUAL;
     trackEvents.get(ev.trackId)!.push(ev);
   }
 
-  // Calculate total duration
   const lastTick = events[events.length - 1].tick;
-  const totalTicks = lastTick + ppqn; // one beat for release
+  const totalTicks = lastTick + ppqn;
   const tickDuration = 60 / bpm / ppqn;
   const totalSeconds = totalTicks * tickDuration + 0.5;
   const totalSamples = Math.ceil(sr * totalSeconds);
-  const masterBuffer = new Float32Array(totalSamples * 2); // stereo interleaved
+  const masterBuffer = new Float32Array(totalSamples * 2);
+
+  const busBuffers: Map<string, Float32Array> = new Map();
+  for (const bus of buses) {
+    busBuffers.set(bus.id, new Float32Array(totalSamples * 2));
+  }
 
   onProgress?.({ percent: 5, stage: "Initializing effects..." });
-
-  const delayHandle = createWasmDelay(sr, 2);
-  setWasmDelay(delayHandle, 0.3, 0.4, 0.3);
-  const reverbHandle = createWasmReverb(sr);
-  setWasmReverb(reverbHandle, 0.5, 0.3, 0.5);
-  const delayOn = PolySynthOutput.delayEnabled;
-  const reverbOn = PolySynthOutput.reverbEnabled;
 
   onProgress?.({ percent: 6, stage: "Rendering tracks..." });
 
   const blockSize = 128;
-  let totalProgress = 6;
-  const progressRange = 90;
+  const totalProgress = 6;
+  const progressRange = 85;
 
   let trackIdx = 0;
   for (const [trackId, evs] of trackEvents) {
@@ -140,44 +160,75 @@ const VISUAL_TO_PPQN = Transport.ppqn / TICKS_PER_BEAT_VISUAL;
 
     synth.destroy();
 
-    // Apply channel volume and pan
+    // Apply per-channel insert FX
+    const chInsertDelay = ch.insertFx?.[0]?.enabled ?? false;
+    const chInsertReverb = ch.insertFx?.[1]?.enabled ?? false;
+    if (chInsertDelay || chInsertReverb) {
+      let dh = -1, rh = -1;
+      if (chInsertDelay) dh = createDelay(sr);
+      if (chInsertReverb) rh = createReverb(sr);
+      for (let i = 0; i < totalSamples; i++) {
+        let m = (channelBuffer[i * 2] + channelBuffer[i * 2 + 1]) * 0.5;
+        if (dh >= 0) m = processWasmDelay(dh, m);
+        if (rh >= 0) m = processWasmReverb(rh, m);
+        channelBuffer[i * 2] += m * 0.5;
+        channelBuffer[i * 2 + 1] += m * 0.5;
+      }
+      if (dh >= 0) freeWasmDelay(dh);
+      if (rh >= 0) freeWasmReverb(rh);
+    }
+
     const angle = (ch.pan + 1) * Math.PI / 4;
     const panL = Math.cos(angle);
     const panR = Math.sin(angle);
-    const vol = ch.volume * (hasSolo ? 1 : 1); // solo already filtered
+    const vol = ch.volume;
+
+    const chSends = ch.sends ?? [];
+    const reverbSend = chSends.find((s) => s.busId === "reverb-bus");
 
     for (let i = 0; i < totalSamples; i++) {
       const l = channelBuffer[i * 2] * vol * panL;
       const r = channelBuffer[i * 2 + 1] * vol * panR;
       masterBuffer[i * 2] += l;
       masterBuffer[i * 2 + 1] += r;
+
+      if (reverbSend && reverbSend.level > 0) {
+        const bus = busBuffers.get("reverb-bus");
+        if (bus) {
+          const sendAmt = (l + r) * 0.5 * reverbSend.level;
+          bus[i * 2] += sendAmt;
+          bus[i * 2 + 1] += sendAmt;
+        }
+      }
     }
 
     trackIdx++;
   }
 
-  onProgress?.({ percent: 97, stage: "Applying master effects..." });
+  onProgress?.({ percent: 92, stage: "Processing buses..." });
 
-  // Apply delay/reverb and master volume to master
-  for (let i = 0; i < totalSamples; i++) {
-    const left = masterBuffer[i * 2];
-    const right = masterBuffer[i * 2 + 1];
-    const mono = (left + right) * 0.5;
+  for (const bus of buses) {
+    const buf = busBuffers.get(bus.id);
+    if (!buf) continue;
 
-    let fx = mono;
-    if (delayOn) fx = processWasmDelay(delayHandle, fx);
-    if (reverbOn) fx = processWasmReverb(reverbHandle, fx);
+    const busInsertDelay = bus.insertFx?.find((f) => f.type === "delay")?.enabled ?? false;
+    const busInsertReverb = bus.insertFx?.find((f) => f.type === "reverb")?.enabled ?? false;
+    if (busInsertDelay || busInsertReverb) {
+      processFxOnBuffer(buf, sr, busInsertDelay, busInsertReverb, totalSamples);
+    }
 
-    const fxL = left + fx * 0.5;
-    const fxR = right + fx * 0.5;
-
-    masterBuffer[i * 2] = fxL * masterVolume;
-    masterBuffer[i * 2 + 1] = fxR * masterVolume;
+    for (let i = 0; i < totalSamples; i++) {
+      masterBuffer[i * 2] += buf[i * 2] * bus.volume;
+      masterBuffer[i * 2 + 1] += buf[i * 2 + 1] * bus.volume;
+    }
   }
 
-  // Cleanup effects
-  freeWasmDelay(delayHandle);
-  freeWasmReverb(reverbHandle);
+  onProgress?.({ percent: 97, stage: "Applying master volume..." });
+
+  for (let i = 0; i < totalSamples; i++) {
+    masterBuffer[i * 2] *= masterVolume;
+    masterBuffer[i * 2 + 1] *= masterVolume;
+  }
 
   onProgress?.({ percent: 99, stage: "Encoding WAV..." });
 

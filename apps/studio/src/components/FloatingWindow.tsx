@@ -1,5 +1,5 @@
 import { useRef, useCallback, useState, useEffect, type ReactNode, type MouseEvent } from "react";
-import { useWindowManager, type WindowId } from "../stores/WindowManager";
+import { useWindowManager, type WindowId } from "../stores/useWindowManager";
 
 type Props = {
   id: WindowId;
@@ -16,7 +16,7 @@ export function FloatingWindow({ id, children, sidebarWidth = 0, onFocus }: Prop
   const dragRef = useRef<{ startX: number; startY: number; winX: number; winY: number; winW: number; winH: number } | null>(null);
 
   const sidebarWidthRef = useRef(sidebarWidth);
-  sidebarWidthRef.current = sidebarWidth;
+  useEffect(() => { sidebarWidthRef.current = sidebarWidth; }, [sidebarWidth]);
 
   const prevSidebarRef = useRef(sidebarWidth);
 

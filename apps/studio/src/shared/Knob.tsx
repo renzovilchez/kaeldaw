@@ -21,5 +21,6 @@ export function Knob({ value, min, max, size, label, onChange }: {
     if (size) el.setAttribute("size", String(size));
     if (label) el.setAttribute("label", label);
   });
-  return createElement("daw-knob", { ref, style: { display: "inline-block" } });
+  // eslint-disable-next-line react-hooks/refs
+  return createElement("daw-knob", { ref, style: { display: "inline-block" as const } });
 }

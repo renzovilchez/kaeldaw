@@ -18,7 +18,7 @@ beforeEach(() => {
 
 function canUndo() { return useUndoStore.getState().canUndo[CTX]; }
 function canRedo() { return useUndoStore.getState().canRedo[CTX]; }
-function exec(getSnapshot: () => { tracks: any[] }) {
+function exec(getSnapshot: () => { tracks: { id: string; name: string }[] }) {
   useUndoStore.getState().executeAction(CTX, getSnapshot);
 }
 
@@ -59,11 +59,13 @@ describe("useUndoStore", () => {
     const snap1 = useUndoStore.getState().undo(CTX, () => ({
       tracks: useTracksStore.getState().tracks.map((t) => ({ id: t.id, name: t.name })),
     }));
-    expect((snap1 as any).tracks).toHaveLength(0);
+    const s1 = snap1 as { tracks: { id: string; name: string }[] };
+    expect(s1.tracks).toHaveLength(0);
     const snap2 = useUndoStore.getState().redo(CTX, () => ({
       tracks: useTracksStore.getState().tracks.map((t) => ({ id: t.id, name: t.name })),
     }));
-    expect((snap2 as any).tracks).toHaveLength(1);
+    const s2 = snap2 as { tracks: { id: string; name: string }[] };
+    expect(s2.tracks).toHaveLength(1);
     expect(canUndo()).toBe(true);
   });
 
@@ -89,8 +91,9 @@ describe("useUndoStore", () => {
       tracks: useTracksStore.getState().tracks.map((t) => ({ id: t.id, name: t.name })),
     }));
     expect(snap).toBeTruthy();
-    expect((snap as any).tracks).toHaveLength(1);
-    expect((snap as any).tracks[0].name).toBe("A");
+    const s = snap as { tracks: { id: string; name: string }[] };
+    expect(s.tracks).toHaveLength(1);
+    expect(s.tracks[0].name).toBe("A");
   });
 
   it("Dos executeActions + undo + redo restaura la segunda", () => {
@@ -104,7 +107,8 @@ describe("useUndoStore", () => {
     const snap = useUndoStore.getState().redo(CTX, () => ({
       tracks: useTracksStore.getState().tracks.map((t) => ({ id: t.id, name: t.name })),
     }));
-    expect((snap as any).tracks).toHaveLength(2);
+    const s = snap as { tracks: { id: string; name: string }[] };
+    expect(s.tracks).toHaveLength(2);
   });
 
   it("redo sin undo previo no hace nada", () => {
@@ -117,7 +121,6 @@ describe("useUndoStore", () => {
     }
     // verify oldest was pushed out (only 50 remain)
     let count = 0;
-    // eslint-disable-next-line no-constant-condition
     while (true) {
       const snap = useUndoStore.getState().undo(CTX, () => ({ tracks: [] }));
       if (!snap) break;
@@ -151,7 +154,8 @@ describe("useUndoStore", () => {
       channels: useMixerStore.getState().channels.map((c) => ({ ...c })),
       masterVolume: useMixerStore.getState().masterVolume,
     }));
-    expect((snap as any).masterVolume).toBe(1);
+    const s = snap as { masterVolume: number };
+    expect(s.masterVolume).toBe(1);
     useUndoStore.getState().setFocusedContext(CTX);
     expect(canUndo()).toBe(true);
   });

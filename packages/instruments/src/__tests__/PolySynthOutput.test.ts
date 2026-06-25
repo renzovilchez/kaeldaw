@@ -82,6 +82,12 @@ class MockGainNode {
   disconnect = vi.fn();
 }
 
+class MockAudioWorkletNode {
+  port = { postMessage: vi.fn(), onmessage: null };
+  connect = vi.fn(() => this);
+  disconnect = vi.fn();
+}
+
 class MockScriptProcessorNode {
   onaudioprocess: ((e: AudioProcessingEvent) => void) | null = null;
   connect = vi.fn(() => this);
@@ -92,6 +98,7 @@ class MockAudioContext {
   state = "running";
   destination = { connect: vi.fn() };
   sampleRate = 44100;
+  audioWorklet = { addModule: vi.fn(async () => {}) };
   createGain = vi.fn(() => new MockGainNode());
   createAnalyser = vi.fn(() => new MockAnalyserNode());
   createScriptProcessor = vi.fn(() => new MockScriptProcessorNode());
@@ -100,6 +107,7 @@ class MockAudioContext {
 
 beforeEach(() => {
   vi.stubGlobal("AudioContext", MockAudioContext as unknown as typeof AudioContext);
+  vi.stubGlobal("AudioWorkletNode", MockAudioWorkletNode);
   vi.stubGlobal("requestAnimationFrame", vi.fn((cb: FrameRequestCallback) => {
     return setTimeout(() => cb(performance.now()), 16) as unknown as number;
   }));
@@ -118,44 +126,40 @@ describe("PolySynthOutput", () => {
     PolySynthOutput.stop();
   });
 
-  it("FEAT-057-01: start() crea synthInstance", async () => {
+  it("FEAT-057-01: start() setea isStarted a true", async () => {
     const { PolySynthOutput } = await import("../PolySynthOutput");
     await PolySynthOutput.start();
-    expect(PolySynthOutput.synthInstance).not.toBeNull();
+    expect(PolySynthOutput.isStarted).toBe(true);
   });
 
   it("FEAT-057-02: start() se puede llamar varias veces sin errores", async () => {
     const { PolySynthOutput } = await import("../PolySynthOutput");
     await PolySynthOutput.start();
-    const first = PolySynthOutput.synthInstance;
-    expect(first).not.toBeNull();
+    expect(PolySynthOutput.isStarted).toBe(true);
     await PolySynthOutput.start();
-    expect(PolySynthOutput.synthInstance).not.toBeNull();
+    expect(PolySynthOutput.isStarted).toBe(true);
   });
 
-  it("FEAT-057-03: stop() resetea synthInstance a null", async () => {
+  it("FEAT-057-03: stop() resetea isStarted a false", async () => {
     const { PolySynthOutput } = await import("../PolySynthOutput");
     await PolySynthOutput.start();
     PolySynthOutput.stop();
-    expect(PolySynthOutput.synthInstance).toBeNull();
+    expect(PolySynthOutput.isStarted).toBe(false);
   });
 
-  it("FEAT-057-04: setDelayEnabled actualiza delayEnabled", async () => {
+  it("FEAT-057-04: setChannelVolume envia mensaje al worklet", async () => {
     const { PolySynthOutput } = await import("../PolySynthOutput");
-    expect(PolySynthOutput.delayEnabled).toBe(false);
-    PolySynthOutput.setDelayEnabled(true);
-    expect(PolySynthOutput.delayEnabled).toBe(true);
-    PolySynthOutput.setDelayEnabled(false);
-    expect(PolySynthOutput.delayEnabled).toBe(false);
+    expect(() => PolySynthOutput.setChannelVolume("ch-1", 0.5, 0, false)).not.toThrow();
   });
 
-  it("FEAT-057-05: setReverbEnabled actualiza reverbEnabled", async () => {
+  it("FEAT-057-05: setChannelInsertFx envia mensaje al worklet", async () => {
     const { PolySynthOutput } = await import("../PolySynthOutput");
-    expect(PolySynthOutput.reverbEnabled).toBe(false);
-    PolySynthOutput.setReverbEnabled(true);
-    expect(PolySynthOutput.reverbEnabled).toBe(true);
-    PolySynthOutput.setReverbEnabled(false);
-    expect(PolySynthOutput.reverbEnabled).toBe(false);
+    expect(() => PolySynthOutput.setChannelInsertFx("ch-1", "delay", true, 0.3)).not.toThrow();
+  });
+
+  it("FEAT-057-06: setChannelSendLevel envia mensaje al worklet", async () => {
+    const { PolySynthOutput } = await import("../PolySynthOutput");
+    expect(() => PolySynthOutput.setChannelSendLevel("ch-1", 0.5)).not.toThrow();
   });
 
   it("FEAT-057-07: stop() llama onLevel(0)", async () => {

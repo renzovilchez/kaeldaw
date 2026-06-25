@@ -53,6 +53,7 @@ vi.mock("kaeldaw-dsp", () => mockDsp);
 
 import { setDspModule } from "../PolySynth";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 setDspModule(mockDsp as any);
 
 import { PolySynth } from "../PolySynth";
