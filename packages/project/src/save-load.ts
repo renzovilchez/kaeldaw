@@ -4,7 +4,7 @@ import { useTracksStore } from "./useTracksStore";
 import { useMixerStore } from "./useMixerStore";
 import { useClipsStore } from "./useClipsStore";
 import { useMidiStore } from "./useMidiStore";
-import { saveToBlob, loadFromBlob } from "./kaeldaw";
+import { saveToBlob, loadFromBlob, type LoadResult } from "./kaeldaw";
 
 export function buildProjectSchema(): ProjectSchema {
   const project = useProjectStore.getState();
@@ -18,31 +18,24 @@ export function buildProjectSchema(): ProjectSchema {
     bpm: project.bpm,
     timeSignature: project.timeSignature,
     ppqn: project.ppqn,
-    tracks: tracks.tracks.map((t) => ({ id: t.id, name: t.name, color: t.color, presetId: t.presetId })),
+    tracks: tracks.tracks.map((t) => ({
+      id: t.id, name: t.name, color: t.color, presetId: t.presetId,
+      presetEngine: t.presetEngine, sampleId: t.sampleId,
+    })),
     mixerChannels: mixer.channels.map((ch) => ({
-      id: ch.id,
-      name: ch.name,
-      volume: ch.volume,
-      pan: ch.pan,
-      mute: ch.mute,
-      solo: ch.solo,
-      insertFx: ch.insertFx,
-      sends: ch.sends,
-      busId: ch.busId,
+      id: ch.id, name: ch.name, volume: ch.volume, pan: ch.pan,
+      mute: ch.mute, solo: ch.solo,
+      insertFx: ch.insertFx, sends: ch.sends, busId: ch.busId,
     })),
     buses: mixer.buses.map((b) => ({
-      id: b.id,
-      name: b.name,
-      type: b.type,
-      volume: b.volume,
-      pan: b.pan,
-      mute: b.mute,
-      insertFx: b.insertFx,
+      id: b.id, name: b.name, type: b.type, volume: b.volume,
+      pan: b.pan, mute: b.mute, insertFx: b.insertFx,
     })),
     masterVolume: mixer.masterVolume,
     clips: clips.clips.map((c) => ({
       id: c.id, trackIndex: c.trackIndex, trackId: c.trackId,
-      startTick: c.startTick, durationTicks: c.durationTicks, color: c.color, name: c.name,
+      startTick: c.startTick, durationTicks: c.durationTicks,
+      color: c.color, name: c.name,
       notes: c.notes.map((n) => ({ ...n })),
       startOffset: c.startOffset,
     })),
@@ -53,7 +46,13 @@ export function buildProjectSchema(): ProjectSchema {
 export function loadProjectSchema(schema: ProjectSchema): void {
   useProjectStore.getState().loadFromSchema(schema);
   useTracksStore.setState({
-    tracks: schema.tracks.map((t) => ({ ...t, color: t.color ?? "#22d3ee", presetId: t.presetId ?? "poly-saw" })),
+    tracks: schema.tracks.map((t) => ({
+      ...t,
+      color: t.color ?? "#22d3ee",
+      presetId: t.presetId ?? "poly-saw",
+      presetEngine: t.presetEngine ?? "synth",
+      sampleId: t.sampleId ?? undefined,
+    })),
     selectedId: null,
   });
   useMixerStore.setState({
@@ -82,7 +81,9 @@ export function loadProjectSchema(schema: ProjectSchema): void {
 
 export async function saveProjectFile(): Promise<void> {
   const schema = buildProjectSchema();
-  const blob = await saveToBlob(schema);
+  const { SampleCache } = await import("@kaeldaw/instruments/SampleCache");
+  const sampleBlobs = SampleCache.toBlobs();
+  const blob = await saveToBlob(schema, sampleBlobs);
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -92,6 +93,10 @@ export async function saveProjectFile(): Promise<void> {
 }
 
 export async function loadProjectFile(file: File): Promise<void> {
-  const schema = await loadFromBlob(file);
-  loadProjectSchema(schema);
+  const result: LoadResult = await loadFromBlob(file);
+  loadProjectSchema(result.schema);
+  if (result.samples.size > 0) {
+    const { SampleCache } = await import("@kaeldaw/instruments/SampleCache");
+    SampleCache.fromBlobs(result.samples);
+  }
 }

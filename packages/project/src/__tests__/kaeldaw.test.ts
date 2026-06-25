@@ -37,15 +37,17 @@ describe(".kaeldaw serialization", () => {
 
   it("loadFromBlob(saveToBlob(p)) roundtrip deep equal", async () => {
     const blob = await saveToBlob(validProject);
-    const result = await loadFromBlob(blob);
-    expect(result).toEqual(validProject);
+    const { schema, samples } = await loadFromBlob(blob);
+    expect(schema).toEqual(validProject);
+    expect(samples.size).toBe(0);
   });
 
   it("loadFromFile con File valido retorna ProjectSchema", async () => {
     const blob = await saveToBlob(validProject);
     const file = new File([blob], "project.kaeldaw", { type: blob.type });
-    const result = await loadFromFile(file);
-    expect(result).toEqual(validProject);
+    const { schema, samples } = await loadFromFile(file);
+    expect(schema).toEqual(validProject);
+    expect(samples.size).toBe(0);
   });
 
   it("loadFromBlob con ZIP sin project.json lanza KaeldawError", async () => {
@@ -88,13 +90,14 @@ describe(".kaeldaw serialization", () => {
       midiNotes: {},
     };
     const blob = await saveToBlob(project);
-    const result = await loadFromBlob(blob);
-    expect(result.version).toBe("0.1.0");
-    expect(result.name).toBe("Complex Project");
-    expect(result.bpm).toBe(200);
-    expect(result.timeSignature).toBe("7/8");
-    expect(result.ppqn).toBe(1920);
-    expect(result.tracks).toHaveLength(3);
-    expect(result.tracks[0].id).toBe("a");
+    const { schema, samples } = await loadFromBlob(blob);
+    expect(schema.version).toBe("0.1.0");
+    expect(schema.name).toBe("Complex Project");
+    expect(schema.bpm).toBe(200);
+    expect(schema.timeSignature).toBe("7/8");
+    expect(schema.ppqn).toBe(1920);
+    expect(schema.tracks).toHaveLength(3);
+    expect(schema.tracks[0].id).toBe("a");
+    expect(samples.size).toBe(0);
   });
 });

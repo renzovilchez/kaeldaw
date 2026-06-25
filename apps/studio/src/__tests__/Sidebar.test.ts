@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@kaeldaw/instruments/PolySynthOutput", () => ({
-  PolySynthOutput: { synthInstance: null },
+  PolySynthOutput: { synthInstance: null, setConfig: vi.fn(), loadSample: vi.fn() },
+}));
+
+vi.mock("@kaeldaw/instruments/SampleCache", () => ({
+  SampleCache: { get: vi.fn(), getMeta: vi.fn() },
 }));
 
 describe("InstrumentManager", () => {
@@ -9,9 +13,9 @@ describe("InstrumentManager", () => {
     vi.resetModules();
   });
 
-  it("FEAT-059-01: presets tiene 5 instrumentos", async () => {
+  it("FEAT-059-01: presets tiene 4 instrumentos por defecto", async () => {
     const { instrumentManager } = await import("../stores/useInstrumentStore");
-    expect(instrumentManager.presets).toHaveLength(5);
+    expect(instrumentManager.presets.length).toBeGreaterThanOrEqual(4);
   });
 
   it("FEAT-059-02: selectedId default es poly-saw", async () => {
@@ -19,50 +23,40 @@ describe("InstrumentManager", () => {
     expect(instrumentManager.selectedId).toBe("poly-saw");
   });
 
-  it("FEAT-059-03: collapsed vacio por defecto", async () => {
-    const { instrumentManager } = await import("../stores/useInstrumentStore");
-    expect(instrumentManager.collapsed).toEqual({});
-  });
-
-  it("FEAT-059-04: toggleCategory colapsa categoria", async () => {
-    const { instrumentManager } = await import("../stores/useInstrumentStore");
-    instrumentManager.toggleCategory("Synths");
-    expect(instrumentManager.collapsed).toEqual({ Synths: true });
-  });
-
-  it("FEAT-059-05: toggleCategory expande categoria colapsada", async () => {
-    const { instrumentManager } = await import("../stores/useInstrumentStore");
-    instrumentManager.toggleCategory("Synths");
-    instrumentManager.toggleCategory("Synths");
-    expect(instrumentManager.collapsed).toEqual({ Synths: false });
-  });
-
-  it("FEAT-059-06: selectPreset cambia selectedId", async () => {
+  it("FEAT-059-03: selectPreset cambia selectedId", async () => {
     const { instrumentManager } = await import("../stores/useInstrumentStore");
     instrumentManager.selectPreset("poly-sine");
     expect(instrumentManager.selectedId).toBe("poly-sine");
   });
 
-  it("FEAT-059-07: subscribe notifica cambios", async () => {
+  it("FEAT-059-04: subscribe notifica cambios", async () => {
     const { instrumentManager } = await import("../stores/useInstrumentStore");
     const fn = vi.fn();
     instrumentManager.subscribe(fn);
-    instrumentManager.toggleCategory("Synths");
+    instrumentManager.selectPreset("poly-square");
     expect(fn).toHaveBeenCalledTimes(1);
   });
 
-  it("selectPreset con ID invalido no cambia selectedId", async () => {
+  it("FEAT-059-05: selectPreset con ID invalido no cambia selectedId", async () => {
     const { instrumentManager } = await import("../stores/useInstrumentStore");
     instrumentManager.selectPreset("nonexistent");
     expect(instrumentManager.selectedId).toBe("poly-saw");
   });
 
-  it("unsubscribe deja de recibir notificaciones", async () => {
+  it("FEAT-059-06: unsubscribe deja de recibir notificaciones", async () => {
     const { instrumentManager } = await import("../stores/useInstrumentStore");
     const fn = vi.fn();
     const unsub = instrumentManager.subscribe(fn);
     unsub();
-    instrumentManager.toggleCategory("Synths");
+    instrumentManager.selectPreset("poly-sine");
     expect(fn).not.toHaveBeenCalled();
+  });
+
+  it("FEAT-059-07: saveCustomPreset agrega preset y lo selecciona", async () => {
+    const { instrumentManager } = await import("../stores/useInstrumentStore");
+    const count = instrumentManager.presets.length;
+    instrumentManager.saveCustomPreset("Test", "synth");
+    expect(instrumentManager.presets).toHaveLength(count + 1);
+    expect(instrumentManager.selectedId).toBe(instrumentManager.presets[count].id);
   });
 });

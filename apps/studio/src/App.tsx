@@ -333,7 +333,8 @@ const PianoRollWindow = memo(function PianoRollWindow({ undoRefs, redoRefs }: { 
           PolySynthOutput.setConfig(instrumentManager.getSelectedConfig());
           previewStartedRef.current = true;
         }
-        PolySynthOutput.noteOn(note, 100);
+        const eng = instrumentManager.selectedPreset?.engine ?? "synth";
+        PolySynthOutput.noteOn(note, 100, "", eng);
       } catch (err) {
         console.error("Key preview failed:", err);
       }
@@ -420,24 +421,24 @@ function AppInner() {
       }
     };
     undoFnsRef.current.tracks = () => {
-      const state = useTracksStore.getState();
-      const snap = useUndoStore.getState().undo("tracks", () => ({
-        tracks: state.tracks.map((t) => ({ id: t.id, name: t.name, color: t.color, presetId: t.presetId })),
-      }));
-      if (snap) {
-        const s = snap as { tracks: { id: string; name: string; color: string; presetId: string }[] };
-        useTracksStore.setState({ tracks: s.tracks, selectedId: useTracksStore.getState().selectedId });
-      }
-    };
-    redoFnsRef.current.tracks = () => {
-      const state = useTracksStore.getState();
-      const snap = useUndoStore.getState().redo("tracks", () => ({
-        tracks: state.tracks.map((t) => ({ id: t.id, name: t.name, color: t.color, presetId: t.presetId })),
-      }));
-      if (snap) {
-        const s = snap as { tracks: { id: string; name: string; color: string; presetId: string }[] };
-        useTracksStore.setState({ tracks: s.tracks, selectedId: useTracksStore.getState().selectedId });
-      }
+    const state = useTracksStore.getState();
+    const snap = useUndoStore.getState().undo("tracks", () => ({
+      tracks: state.tracks.map((t) => ({ id: t.id, name: t.name, color: t.color, presetId: t.presetId, presetEngine: t.presetEngine, sampleId: t.sampleId })),
+    }));
+    if (snap) {
+      const s = snap as { tracks: { id: string; name: string; color: string; presetId: string; presetEngine: string; sampleId?: string }[] };
+      useTracksStore.setState({ tracks: s.tracks as any, selectedId: useTracksStore.getState().selectedId });
+    }
+  };
+  redoFnsRef.current.tracks = () => {
+    const state = useTracksStore.getState();
+    const snap = useUndoStore.getState().redo("tracks", () => ({
+      tracks: state.tracks.map((t) => ({ id: t.id, name: t.name, color: t.color, presetId: t.presetId, presetEngine: t.presetEngine, sampleId: t.sampleId })),
+    }));
+    if (snap) {
+      const s = snap as { tracks: { id: string; name: string; color: string; presetId: string; presetEngine: string; sampleId?: string }[] };
+      useTracksStore.setState({ tracks: s.tracks as any, selectedId: useTracksStore.getState().selectedId });
+    }
     };
     return () => { undoFnsRef.current.mixer = null; redoFnsRef.current.mixer = null; undoFnsRef.current.tracks = null; redoFnsRef.current.tracks = null; };
   }, []);
@@ -569,7 +570,18 @@ function AppInner() {
   const handleSelectTrack = useCallback((id: string) => {
     selectTrack(id);
     const track = useTracksStore.getState().tracks.find((t) => t.id === id);
-    if (track) instrumentManager.selectPreset(track.presetId);
+    if (track) {
+      instrumentManager.selectPreset(track.presetId);
+      if (track.presetEngine === "sampler" && track.sampleId) {
+        import("@kaeldaw/instruments/SampleCache").then(({ SampleCache }) => {
+          const data = SampleCache.get(track.sampleId!);
+          if (data) {
+            const meta = SampleCache.getMeta(track.sampleId!);
+            PolySynthOutput.loadSample(track.sampleId!, data, meta?.sampleRate ?? 44100);
+          }
+        });
+      }
+    }
   }, [selectTrack]);
 
   const handleColorChange = useCallback((id: string, color: string) => {

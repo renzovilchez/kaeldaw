@@ -15,13 +15,27 @@ async function blobToUint8Array(blob: Blob): Promise<Uint8Array> {
   return new Uint8Array(ab);
 }
 
-export async function saveToBlob(project: ProjectSchema): Promise<Blob> {
+export async function saveToBlob(project: ProjectSchema, sampleBlobs?: Map<string, Blob>): Promise<Blob> {
   const json = serialize(project);
-  const zipped = zipSync({ "project.json": strToU8(json) }, { level: 6 });
+  const files: Record<string, Uint8Array> = { "project.json": strToU8(json) };
+
+  if (sampleBlobs) {
+    for (const [key, blob] of sampleBlobs) {
+      const ab = await blob.arrayBuffer();
+      files[key] = new Uint8Array(ab);
+    }
+  }
+
+  const zipped = zipSync(files, { level: 6 });
   return new Blob([zipped], { type: KAELDAW_MIME });
 }
 
-export async function loadFromBlob(blob: Blob): Promise<ProjectSchema> {
+export interface LoadResult {
+  schema: ProjectSchema;
+  samples: Map<string, Uint8Array>;
+}
+
+export async function loadFromBlob(blob: Blob): Promise<LoadResult> {
   let data: Uint8Array;
   try {
     data = await blobToUint8Array(blob);
@@ -42,9 +56,18 @@ export async function loadFromBlob(blob: Blob): Promise<ProjectSchema> {
   }
 
   const json = strFromU8(projectJson);
-  return deserialize(json);
+  const schema = deserialize(json);
+
+  const samples = new Map<string, Uint8Array>();
+  for (const [name, u8] of Object.entries(files)) {
+    if (name.startsWith("samples/") && name.endsWith(".wav")) {
+      samples.set(name, u8);
+    }
+  }
+
+  return { schema, samples };
 }
 
-export async function loadFromFile(file: File): Promise<ProjectSchema> {
+export async function loadFromFile(file: File): Promise<LoadResult> {
   return loadFromBlob(file);
 }

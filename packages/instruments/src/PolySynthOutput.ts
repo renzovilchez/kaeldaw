@@ -271,11 +271,56 @@ class Synth {
   }
 }
 
+class Sampler {
+  constructor(sr) {
+    this.sr=sr;
+    this.buf=null;
+    this.bufSr=sr;
+    this.rn=60;
+    this.vs=[];
+    for(let i=0;i<8;i++)this.vs.push({on:0,note:60,vel:0,pos:0,rel:0,age:0,al:0,as:0,at:0,ar:0});
+  }
+  _al(){for(let i=0;i<this.vs.length;i++)if(!this.vs[i].on)return this.vs[i];let o=this.vs[0];for(let i=1;i<this.vs.length;i++)if(this.vs[i].age<o.age)o=this.vs[i];o.on=0;return o;}
+  setBuf(d,sr){this.buf=d;this.bufSr=sr;}
+  noteOn(n,v,chId){
+    if(!this.buf)return;
+    const vc=this._al();
+    vc.note=n;vc.vel=v/127;vc.pos=0;vc.on=1;vc.rel=0;vc.ch=chId||"";
+    vc.al=0;vc.as=1;vc.at=0;
+  }
+  noteOff(n){for(const v of this.vs)if(v.on&&v.note===n&&!v.rel){v.rel=1;v.ar=v.al;v.as=4;v.at=0;}}
+  allOff(){for(const v of this.vs)if(v.on){v.rel=1;v.ar=v.al;v.as=4;v.at=0;}}
+  sample(){
+    const cs={};const dt=1/this.sr;
+    for(const v of this.vs){
+      if(!v.on)continue;
+      const ratio=Math.pow(2,(v.note-this.rn)/12)*(this.sr/this.bufSr);
+      if(!this.buf||v.pos>=this.buf.length){v.on=0;continue;}
+      const pi=Math.floor(v.pos),fr=v.pos-pi;
+      const s0=this.buf[pi]||0,s1=this.buf[Math.min(pi+1,this.buf.length-1)]||0;
+      const raw=s0+fr*(s1-s0);
+      let amp=0;
+      switch(v.as){
+        case 1:v.at+=dt;if(v.at>=0.01){v.al=1;v.as=2;v.at=0;}else v.al=v.at/0.01;break;
+        case 2:v.at+=dt;if(v.at>=0.1){v.al=1;v.as=3;}else v.al=v.at/0.1;break;
+        case 3:v.al=1;break;
+        case 4:v.at+=dt;if(v.at>=0.2){v.al=0;v.on=0;}else v.al=v.ar*(1-v.at/0.2);break;
+      }
+      amp=v.al*v.vel;
+      const chId=v.ch||"default";
+      cs[chId]=(cs[chId]||0)+raw*amp;
+      v.pos+=ratio;
+    }
+    return cs;
+  }
+}
+
 class Proc extends AudioWorkletProcessor {
   constructor(opts) {
     super();
     const sr=(opts.processorOptions&&opts.processorOptions.sampleRate)||48000;
     this.synth=new Synth(sr);
+    this.sampler=new Sampler(sr);
     this.sr=sr;
     this.events=[];
     this.idx=0;
@@ -320,10 +365,14 @@ class Proc extends AudioWorkletProcessor {
           for(const[n,v]of active) this.synth.noteOn(n,v.vel,v.chId);
           break;
         }
-        case "noteOn": this.synth.noteOn(m.note,m.vel,m.channelId||""); break;
-        case "noteOff": this.synth.noteOff(m.note); break;
+        case "noteOn":
+  if(m.engine==="sampler")this.sampler.noteOn(m.note,m.vel,m.channelId||"");
+  else this.synth.noteOn(m.note,m.vel,m.channelId||"");
+  break;
+        case "noteOff": this.synth.noteOff(m.note); this.sampler.noteOff(m.note); break;
         case "allOff":
           this.synth.allOff();
+          this.sampler.allOff();
           this.fadeOut=Math.round(0.05*this.sr);
           this.fadeOutMax=this.fadeOut;
           break;
@@ -338,6 +387,12 @@ class Proc extends AudioWorkletProcessor {
           if(m.insertReverb!==void 0)c.insertReverb=m.insertReverb;
           if(m.sendLevel!==void 0)c.sendLevel=m.sendLevel;
           this.chState[m.channelId]=c;
+          break;
+        }
+        case "loadSample":{
+          if(this.sampler){
+            this.sampler.setBuf(new Float32Array(m.data),m.sampleRate||this.sr);
+          }
           break;
         }
         case "wasm":{
@@ -378,6 +433,8 @@ class Proc extends AudioWorkletProcessor {
           }
         }
         const chOut=this.synth.sample();
+        const smpOut=this.sampler.sample();
+        for(const k in smpOut)chOut[k]=(chOut[k]||0)+smpOut[k];
         let master=0;
         const busAc={};
         for(const chId in chOut){
@@ -496,8 +553,14 @@ export class PolySynthOutputSingleton {
     this._worklet?.port.postMessage({ type: "channelFx", channelId, sendLevel: level });
   }
 
+  loadSample(sampleId: string, data: Float32Array, sampleRate: number): void {
+    this._worklet?.port.postMessage({ type: "loadSample", data: data.buffer, sampleRate, _sid: sampleId }, [data.buffer]);
+  }
+
   setConfig(config: Record<string, unknown>): void {
-    this._worklet?.port.postMessage({ type: "cfg", config });
+    const c = { ...config };
+    delete c.engine;
+    this._worklet?.port.postMessage({ type: "cfg", config: c });
   }
 
   setMetronome(enabled: boolean, ppqn: number, beatsPerBar: number): void {
@@ -509,8 +572,8 @@ export class PolySynthOutputSingleton {
     this._worklet?.port.postMessage({ type: "events", events, bpm, ppqn, startTick });
   }
 
-  noteOn(note: number, velocity: number, channelId?: string): void {
-    this._worklet?.port.postMessage({ type: "noteOn", note, vel: velocity, channelId: channelId ?? "" });
+  noteOn(note: number, velocity: number, channelId?: string, engine?: string): void {
+    this._worklet?.port.postMessage({ type: "noteOn", note, vel: velocity, channelId: channelId ?? "", engine: engine ?? "synth" });
   }
   noteOff(note: number): void {
     this._worklet?.port.postMessage({ type: "noteOff", note });

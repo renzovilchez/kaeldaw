@@ -2,14 +2,15 @@ import { create } from "zustand";
 import type { ProjectTrack } from "./schema";
 
 export interface TracksStore {
-  tracks: (ProjectTrack & { color: string; presetId: string })[];
+  tracks: (ProjectTrack & { color: string; presetId: string; presetEngine: string; sampleId?: string })[];
   selectedId: string | null;
-  addTrack: (name?: string, presetId?: string) => void;
+  addTrack: (name?: string, presetId?: string, presetEngine?: string) => void;
   removeTrack: (id: string) => void;
   renameTrack: (id: string, name: string) => void;
   selectTrack: (id: string | null) => void;
   setTrackColor: (id: string, color: string) => void;
   setTrackPreset: (id: string, presetId: string) => void;
+  setTrackEngine: (id: string, engine: string, sampleId?: string) => void;
   reorderTracks: (fromIndex: number, toIndex: number) => void;
   clearTracks: () => void;
 }
@@ -19,13 +20,15 @@ let trackCounter = 0;
 export const useTracksStore = create<TracksStore>((set) => ({
   tracks: [],
   selectedId: null,
-  addTrack: (name?: string, presetId = "poly-saw") => {
+  addTrack: (name?: string, presetId = "poly-saw", presetEngine?: string) => {
     trackCounter++;
     const track = {
       id: crypto.randomUUID(),
       name: name ?? `Track ${trackCounter}`,
       color: "#22d3ee",
       presetId,
+      presetEngine: presetEngine ?? "synth",
+      sampleId: undefined as string | undefined,
     };
     set((s) => ({ tracks: [...s.tracks, track] }));
   },
@@ -51,6 +54,11 @@ export const useTracksStore = create<TracksStore>((set) => ({
   setTrackPreset: (id: string, presetId: string) => {
     set((s) => ({
       tracks: s.tracks.map((t) => (t.id === id ? { ...t, presetId } : t)),
+    }));
+  },
+  setTrackEngine: (id: string, engine: string, sampleId?: string) => {
+    set((s) => ({
+      tracks: s.tracks.map((t) => (t.id === id ? { ...t, presetEngine: engine, sampleId } : t)),
     }));
   },
   reorderTracks: (fromIndex: number, toIndex: number) => {

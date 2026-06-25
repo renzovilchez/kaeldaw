@@ -18,6 +18,7 @@ export { useTransportStore } from "./useTransportStore";
 export type { TransportStore } from "./useTransportStore";
 export { useTracksStore } from "./useTracksStore";
 export type { TracksStore } from "./useTracksStore";
+export type { LoadResult } from "./kaeldaw";
 export { useMixerStore } from "./useMixerStore";
 export type { MixerStore, MixerChannel } from "./useMixerStore";
 export { useProjectStore } from "./useProjectStore";

@@ -12,6 +12,8 @@ export interface ProjectTrack {
   name: string;
   color?: string;
   presetId?: string;
+  presetEngine?: string;
+  sampleId?: string;
 }
 
 export interface ProjectInsertFx {

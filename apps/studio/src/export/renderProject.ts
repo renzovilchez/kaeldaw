@@ -1,6 +1,7 @@
 import { encodeWav, type ExportResult } from "@kaeldaw/project/wav-export";
 import { useClipsStore } from "@kaeldaw/project/useClipsStore";
 import { useMixerStore, type MixerChannel } from "@kaeldaw/project/useMixerStore";
+import { useTracksStore } from "@kaeldaw/project/useTracksStore";
 import { Transport } from "@kaeldaw/audio-engine/Transport";
 import { initWasmEffects, getDspModule, createWasmDelay, setWasmDelay, processWasmDelay, freeWasmDelay, createWasmReverb, setWasmReverb, processWasmReverb, freeWasmReverb } from "@kaeldaw/audio-engine/WasmEffects";
 
@@ -130,35 +131,66 @@ const VISUAL_TO_PPQN = Transport.ppqn / TICKS_PER_BEAT_VISUAL;
   let trackIdx = 0;
   for (const [trackId, evs] of trackEvents) {
     const ch = channelMap.get(trackId)!;
-    const synth = new PolySynth(sr);
 
     onProgress?.({
       percent: totalProgress + Math.round((trackIdx / trackEvents.size) * progressRange),
       stage: `Rendering ${ch.name}...`,
     });
 
-    let eventIdx = 0;
     const channelBuffer = new Float32Array(totalSamples * 2);
 
-    for (let s = 0; s < totalSamples; s += blockSize) {
-      const currentSec = s / sr;
-      const currentTick = currentSec / tickDuration;
-
-      while (eventIdx < evs.length && evs[eventIdx].tick <= currentTick) {
-        const ev = evs[eventIdx++];
-        if (ev.type === "on") synth.noteOn(ev.note, ev.velocity);
-        else synth.noteOff(ev.note);
+    const trackData = useTracksStore.getState().tracks.find((t) => t.id === trackId);
+    const isSampler = trackData?.presetEngine === "sampler";
+    if (isSampler) {
+      const { Sampler } = await import("@kaeldaw/instruments/Sampler");
+      const { SampleCache } = await import("@kaeldaw/instruments/SampleCache");
+      const sampler = new Sampler(sr);
+      const sid = trackData?.sampleId;
+      if (sid) {
+        const data = SampleCache.get(sid);
+        if (data) {
+          const meta = SampleCache.getMeta(sid);
+          const rootNote = (ch as any).rootNote ?? 60;
+          sampler.setSample(data, meta?.sampleRate ?? sr, rootNote);
+        }
       }
-
-      const block = synth.processBlock(Math.min(blockSize, totalSamples - s));
-      for (let i = 0; i < block.length; i += 2) {
-        const idx = s + i / 2;
-        channelBuffer[idx * 2] += block[i];
-        channelBuffer[idx * 2 + 1] += block[i + 1];
+      let eventIdx = 0;
+      for (let s = 0; s < totalSamples; s += blockSize) {
+        const currentSec = s / sr;
+        const currentTick = currentSec / tickDuration;
+        while (eventIdx < evs.length && evs[eventIdx].tick <= currentTick) {
+          const ev = evs[eventIdx++];
+          if (ev.type === "on") sampler.noteOn(ev.note, ev.velocity);
+          else sampler.noteOff(ev.note);
+        }
+        const block = sampler.processBlock(Math.min(blockSize, totalSamples - s));
+        for (let i = 0; i < block.length; i += 2) {
+          const idx = s + i / 2;
+          channelBuffer[idx * 2] += block[i];
+          channelBuffer[idx * 2 + 1] += block[i + 1];
+        }
       }
+      sampler.destroy();
+    } else {
+      const synth = new PolySynth(sr);
+      let eventIdx = 0;
+      for (let s = 0; s < totalSamples; s += blockSize) {
+        const currentSec = s / sr;
+        const currentTick = currentSec / tickDuration;
+        while (eventIdx < evs.length && evs[eventIdx].tick <= currentTick) {
+          const ev = evs[eventIdx++];
+          if (ev.type === "on") synth.noteOn(ev.note, ev.velocity);
+          else synth.noteOff(ev.note);
+        }
+        const block = synth.processBlock(Math.min(blockSize, totalSamples - s));
+        for (let i = 0; i < block.length; i += 2) {
+          const idx = s + i / 2;
+          channelBuffer[idx * 2] += block[i];
+          channelBuffer[idx * 2 + 1] += block[i + 1];
+        }
+      }
+      synth.destroy();
     }
-
-    synth.destroy();
 
     // Apply per-channel insert FX
     const chInsertDelay = ch.insertFx?.[0]?.enabled ?? false;
