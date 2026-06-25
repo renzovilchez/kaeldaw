@@ -26,6 +26,18 @@ export function buildProjectSchema(): ProjectSchema {
       pan: ch.pan,
       mute: ch.mute,
       solo: ch.solo,
+      insertFx: ch.insertFx,
+      sends: ch.sends,
+      busId: ch.busId,
+    })),
+    buses: mixer.buses.map((b) => ({
+      id: b.id,
+      name: b.name,
+      type: b.type,
+      volume: b.volume,
+      pan: b.pan,
+      mute: b.mute,
+      insertFx: b.insertFx,
     })),
     masterVolume: mixer.masterVolume,
     clips: clips.clips.map((c) => ({
@@ -45,7 +57,23 @@ export function loadProjectSchema(schema: ProjectSchema): void {
     selectedId: null,
   });
   useMixerStore.setState({
-    channels: schema.mixerChannels.map((ch) => ({ ...ch, meterLevel: 0 })),
+    channels: schema.mixerChannels.map((ch) => ({
+      ...ch,
+      meterLevel: 0,
+      insertFx: ch.insertFx ?? [{ type: "delay", enabled: false, wet: 0.3 }, { type: "reverb", enabled: false, wet: 0.3 }],
+      sends: ch.sends ?? [{ busId: "reverb-bus", level: 0 }, { busId: "delay-bus", level: 0 }],
+      busId: ch.busId ?? undefined,
+    })),
+    buses: schema.buses.length > 0
+      ? schema.buses.map((b) => ({
+          ...b,
+          meterLevel: 0,
+          insertFx: b.insertFx ?? [{ type: "delay", enabled: false, wet: 0.3 }, { type: "reverb", enabled: false, wet: 0.3 }],
+        }))
+      : [
+          { id: "reverb-bus", name: "Reverb", type: "aux" as const, volume: 0.8, pan: 0, mute: false, insertFx: [{ type: "reverb", enabled: true, wet: 1 }], meterLevel: 0 },
+          { id: "delay-bus", name: "Delay", type: "aux" as const, volume: 0.8, pan: 0, mute: false, insertFx: [{ type: "delay", enabled: true, wet: 1 }], meterLevel: 0 },
+        ],
     masterVolume: schema.masterVolume,
   });
   useClipsStore.getState().setClips(schema.clips.map((c) => ({ ...c, startOffset: c.startOffset ?? 0 })));

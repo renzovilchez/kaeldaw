@@ -49,7 +49,7 @@ describe("save-load", () => {
     const schema: ProjectSchema = {
       version: "0.1.0", name: "Loaded", bpm: 140, timeSignature: "3/4", ppqn: 480,
       tracks: [{ id: "t1", name: "Drums" }, { id: "t2", name: "Bass" }],
-      mixerChannels: [], masterVolume: 1, clips: [], midiNotes: {},
+      buses: [], mixerChannels: [], masterVolume: 1, clips: [], midiNotes: {},
     };
     loadProjectSchema(schema);
     expect(useTracksStore.getState().tracks).toHaveLength(2);
@@ -60,6 +60,7 @@ describe("save-load", () => {
     const schema: ProjectSchema = {
       version: "0.1.0", name: "Loaded", bpm: 140, timeSignature: "3/4", ppqn: 480,
       tracks: [],
+      buses: [],
       mixerChannels: [
         { id: "t1", name: "Kick", volume: 0.8, pan: 0.3, mute: true, solo: false },
       ],
@@ -75,7 +76,7 @@ describe("save-load", () => {
   it("FEAT-054-07: loadProjectSchema restaura clips", () => {
     const schema: ProjectSchema = {
       version: "0.1.0", name: "Loaded", bpm: 140, timeSignature: "3/4", ppqn: 480,
-      tracks: [], mixerChannels: [], masterVolume: 1,
+      tracks: [], buses: [], mixerChannels: [], masterVolume: 1,
       clips: [{ id: 1, trackIndex: 0, trackId: "t1", startTick: 0, durationTicks: 96, color: "#22d3ee", name: "Clip", notes: [] }],
       midiNotes: {},
     };
@@ -90,7 +91,7 @@ describe("save-load", () => {
     useMidiStore.getState().loadForClip(1, []);
     const schema: ProjectSchema = {
       version: "0.1.0", name: "Loaded", bpm: 140, timeSignature: "3/4", ppqn: 480,
-      tracks: [{ id: "t2", name: "B" }], mixerChannels: [], masterVolume: 1, clips: [], midiNotes: {},
+      tracks: [{ id: "t2", name: "B" }], buses: [], mixerChannels: [], masterVolume: 1, clips: [], midiNotes: {},
     };
     loadProjectSchema(schema);
     expect(useTracksStore.getState().selectedId).toBeNull();
@@ -103,6 +104,7 @@ describe("save-load", () => {
     const schema: ProjectSchema = {
       version: "0.1.0", name: "Loaded", bpm: 140, timeSignature: "3/4", ppqn: 480,
       tracks: [],
+      buses: [],
       mixerChannels: [{ id: "t1", name: "Kick", volume: 1, pan: 0, mute: false, solo: false }],
       masterVolume: 1, clips: [], midiNotes: {},
     };

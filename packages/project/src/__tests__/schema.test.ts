@@ -14,6 +14,7 @@ const validProject: ProjectSchema = {
   timeSignature: "4/4",
   ppqn: 960,
   tracks: [],
+  buses: [],
   mixerChannels: [],
   masterVolume: 1,
   clips: [],

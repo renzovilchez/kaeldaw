@@ -42,6 +42,7 @@ describe("useProjectStore", () => {
       timeSignature: "7/8",
       ppqn: 1920,
       tracks: [],
+      buses: [],
       mixerChannels: [],
       masterVolume: 1,
       clips: [],

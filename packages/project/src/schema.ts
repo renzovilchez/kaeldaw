@@ -14,6 +14,27 @@ export interface ProjectTrack {
   presetId?: string;
 }
 
+export interface ProjectInsertFx {
+  type: "delay" | "reverb";
+  enabled: boolean;
+  wet: number;
+}
+
+export interface ProjectFxSend {
+  busId: string;
+  level: number;
+}
+
+export interface ProjectMixerBus {
+  id: string;
+  name: string;
+  type: "aux" | "group";
+  volume: number;
+  pan: number;
+  mute: boolean;
+  insertFx?: ProjectInsertFx[];
+}
+
 export interface ProjectMixerChannel {
   id: string;
   name: string;
@@ -21,6 +42,9 @@ export interface ProjectMixerChannel {
   pan: number;
   mute: boolean;
   solo: boolean;
+  insertFx?: ProjectInsertFx[];
+  sends?: ProjectFxSend[];
+  busId?: string;
 }
 
 export interface ProjectClip {
@@ -52,6 +76,7 @@ export interface ProjectSchema {
   ppqn: number;
   tracks: ProjectTrack[];
   mixerChannels: ProjectMixerChannel[];
+  buses: ProjectMixerBus[];
   masterVolume: number;
   clips: ProjectClip[];
   midiNotes: Record<number, ProjectMidiNote[]>;
@@ -128,6 +153,7 @@ export function deserialize(json: string): ProjectSchema {
     ppqn,
     tracks: parsed.tracks,
     mixerChannels: Array.isArray(parsed.mixerChannels) ? parsed.mixerChannels : [],
+    buses: Array.isArray(parsed.buses) ? parsed.buses : [],
     masterVolume: typeof parsed.masterVolume === "number" ? parsed.masterVolume : 1,
     clips: Array.isArray(parsed.clips) ? parsed.clips : [],
     midiNotes: parsed.midiNotes && typeof parsed.midiNotes === "object" && !Array.isArray(parsed.midiNotes)
