@@ -37,11 +37,19 @@ apps/studio/
 kaeldaw/                          # repo principal
 │
 ├── apps/
-│   └── studio/                   # ← EXISTE AHORA — la app web
+│   └── studio/                   # app web
 │       └── src/
-│           ├── shell/            # providers raíz, layout base       [PLANEADO]
-│           ├── workspace/        # área de trabajo — ensambla paneles [PLANEADO]
-│           └── main.tsx          # ← EXISTE AHORA
+│           ├── app/              # shell (TopBar, App.tsx)
+│           ├── audio-export/     # export WAV offline
+│           ├── instruments/      # InstrumentBrowser, manager
+│           ├── mixer/            # MixerPanel + handlers
+│           ├── piano-roll/       # PianoRollWindow
+│           ├── playback/         # MIDI scheduler, engine hooks
+│           ├── shared/           # FloatingWindow, Fader, Knob, hooks
+│           ├── synth-edit/       # SynthEditor
+│           ├── timeline/         # TimelineWindow
+│           ├── tracks/           # TrackList, handlers
+│           └── main.tsx          # entry point
 │
 ├── packages/                     # todo lo de abajo es PLANEADO
 │   │
