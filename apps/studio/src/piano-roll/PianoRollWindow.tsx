@@ -48,6 +48,7 @@ export const PianoRollWindow = memo(function PianoRollWindow({
   const removeNote = useMidiStore((s) => s.removeNote);
   const elRef = useRef<PianoRollWC>(null);
   const previewStartedRef = useRef(false);
+  const previewStateRef = useRef(new Map<number, boolean>());
   const transportState = useTransportStore((s) => s.state);
   useEffect(() => {
     if (transportState !== "playing") previewStartedRef.current = false;
@@ -138,6 +139,7 @@ export const PianoRollWindow = memo(function PianoRollWindow({
 
     const onKeyPreview = async (e: Event) => {
       const { note } = (e as CustomEvent).detail;
+      previewStateRef.current.set(note, true);
       try {
         if (!previewStartedRef.current) {
           AudioContextManager.init();
@@ -145,8 +147,10 @@ export const PianoRollWindow = memo(function PianoRollWindow({
           PolySynthOutput.setConfig(instrumentManager.getSelectedConfig());
           previewStartedRef.current = true;
         }
-        const eng = instrumentManager.selectedPreset?.engine ?? "synth";
-        PolySynthOutput.noteOn(note, 100, "", eng);
+        if (previewStateRef.current.get(note)) {
+          const eng = instrumentManager.selectedPreset?.engine ?? "synth";
+          PolySynthOutput.noteOn(note, 100, "", eng);
+        }
       } catch (err) {
         console.error("Key preview failed:", err);
       }
@@ -154,6 +158,7 @@ export const PianoRollWindow = memo(function PianoRollWindow({
 
     const onKeyRelease = (e: Event) => {
       const { note } = (e as CustomEvent).detail;
+      previewStateRef.current.set(note, false);
       PolySynthOutput.noteOff(note);
     };
 
