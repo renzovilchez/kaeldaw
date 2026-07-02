@@ -1,8 +1,19 @@
 import { memo, useState, useRef, useEffect } from "react";
-import { Fader } from "../shared/Fader";
-import { Knob } from "../shared/Knob";
+import { Fader } from "../shared/components/Fader";
+import { Knob } from "../shared/components/Knob";
 
-const COLORS = ["#22d3ee", "#ef4444", "#22c55e", "#f59e0b", "#a855f7", "#ec4899", "#3b82f6", "#14b8a6", "#f97316", "#84cc16"];
+const COLORS = [
+  "#22d3ee",
+  "#ef4444",
+  "#22c55e",
+  "#f59e0b",
+  "#a855f7",
+  "#ec4899",
+  "#3b82f6",
+  "#14b8a6",
+  "#f97316",
+  "#84cc16",
+];
 
 export const TrackRow = memo(function TrackRow({
   track,
@@ -65,7 +76,10 @@ export const TrackRow = memo(function TrackRow({
         <div
           className="w-3 h-3 rounded-full shrink-0 cursor-pointer border border-[#555]"
           style={{ backgroundColor: track.color ?? "#22d3ee" }}
-          onClick={(e) => { e.stopPropagation(); setShowPicker(!showPicker); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowPicker(!showPicker);
+          }}
         />
         {showPicker && (
           <div
@@ -78,7 +92,11 @@ export const TrackRow = memo(function TrackRow({
                 key={c}
                 className="w-3.5 h-3.5 rounded-full cursor-pointer hover:scale-125 transition-transform"
                 style={{ backgroundColor: c }}
-                onClick={(e) => { e.stopPropagation(); onColorChange?.(track.id, c); setShowPicker(false); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onColorChange?.(track.id, c);
+                  setShowPicker(false);
+                }}
               />
             ))}
           </div>

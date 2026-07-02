@@ -4,8 +4,8 @@ import { createRoot, type Root } from "react-dom/client";
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
-import { TopBar } from "../layout/TopBar";
-import { WindowManagerProvider } from "../stores/WindowManager";
+import { TopBar } from "./TopBar";
+import { WindowManagerProvider } from "../../shared/components/WindowManager";
 import { useTransportStore } from "@kaeldaw/project/useTransportStore";
 
 let root: Root;
@@ -16,23 +16,32 @@ function renderTopBar(props: Record<string, unknown> = {}) {
   document.body.appendChild(container);
   root = createRoot(container);
   act(() => {
-    root.render(createElement(WindowManagerProvider, null,
-      createElement(TopBar as any, {
-        projectName: "Test Project",
-        onSetName: () => {},
-        onSave: () => {},
-        onLoad: () => {},
-        onExport: () => {},
-        onUndo: () => {},
-        onRedo: () => {},
-        ...props,
-      }),
-    ));
+    root.render(
+      createElement(
+        WindowManagerProvider,
+        null,
+        createElement(TopBar, {
+          projectName: "Test Project",
+          onSetName: () => {},
+          onSave: () => {},
+          onLoad: () => {},
+          onExport: () => {},
+          onUndo: () => {},
+          onRedo: () => {},
+          ...props,
+        }),
+      ),
+    );
   });
 }
 
 function cleanup() {
-  if (root) { act(() => { root.unmount(); }); root = undefined!; }
+  if (root) {
+    act(() => {
+      root.unmount();
+    });
+    root = undefined!;
+  }
   if (container && container.parentNode) {
     document.body.removeChild(container);
   }
@@ -59,7 +68,9 @@ describe("TopBar", () => {
 
   it("FEAT-061-02: renderiza project name input", () => {
     renderTopBar();
-    const input = container.querySelector("input[value='Test Project']") as HTMLInputElement | null;
+    const input = container.querySelector(
+      "input[value='Test Project']",
+    ) as HTMLInputElement | null;
     expect(input).toBeTruthy();
     cleanup();
   });
@@ -84,7 +95,9 @@ describe("TopBar", () => {
 
   it("FEAT-061-06: renderiza BPM input", () => {
     renderTopBar();
-    const input = container.querySelector("input[value='120']") as HTMLInputElement | null;
+    const input = container.querySelector(
+      "input[value='120']",
+    ) as HTMLInputElement | null;
     expect(input).toBeTruthy();
     cleanup();
   });
@@ -97,22 +110,24 @@ describe("TopBar", () => {
     cleanup();
   });
 
-  it("FEAT-061-08: renderiza botones Undo, Redo", () => {
+  it("FEAT-061-08: renderiza botones Undo (↩), Redo (↪)", () => {
     renderTopBar();
-    expect(container.textContent).toContain("Undo");
-    expect(container.textContent).toContain("Redo");
+    expect(container.textContent).toContain("\u21A9");
+    expect(container.textContent).toContain("\u21AA");
     cleanup();
   });
 
-  it("FEAT-061-09: renderiza 5 window toggle buttons", () => {
+  it("FEAT-061-09: renderiza 4 window toggle buttons", () => {
     renderTopBar();
     const buttons = container.querySelectorAll("button");
     const windowButtons = Array.from(buttons).filter(
-      (b) => b.textContent?.includes("Timeline") || b.textContent?.includes("Piano") ||
-             b.textContent?.includes("Mixer") || b.textContent?.includes("Tracks") ||
-             b.textContent?.includes("Waveform"),
+      (b) =>
+        b.textContent?.includes("Timeline") ||
+        b.textContent?.includes("Piano") ||
+        b.textContent?.includes("Mixer") ||
+        b.textContent?.includes("Tracks"),
     );
-    expect(windowButtons.length).toBe(5);
+    expect(windowButtons.length).toBe(4);
     cleanup();
   });
 });

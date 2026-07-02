@@ -1,20 +1,38 @@
 import { useRef, useEffect, createElement, memo } from "react";
 
 interface ChannelData {
-  id: string; name: string; volume: number; pan: number;
-  mute: boolean; solo: boolean; meterLevel: number;
-  insertDelay: boolean; insertReverb: boolean; sendLevel: number;
+  id: string;
+  name: string;
+  volume: number;
+  pan: number;
+  mute: boolean;
+  solo: boolean;
+  meterLevel: number;
+  insertDelay: boolean;
+  insertReverb: boolean;
+  sendLevel: number;
 }
 
 interface BusData {
-  id: string; name: string; type: string;
-  volume: number; pan: number; mute: boolean; meterLevel: number;
+  id: string;
+  name: string;
+  type: string;
+  volume: number;
+  pan: number;
+  mute: boolean;
+  meterLevel: number;
 }
 
 const MixerChannelItem = memo(function MixerChannelItem({
-  channel, index,
-  onVolumeChange, onPanChange, onToggleMute, onToggleSolo,
-  onInsertDelay, onInsertReverb, onSendLevel,
+  channel,
+  index,
+  onVolumeChange,
+  onPanChange,
+  onToggleMute,
+  onToggleSolo,
+  onInsertDelay,
+  onInsertReverb,
+  onSendLevel,
 }: {
   channel: ChannelData;
   index: number;
@@ -43,18 +61,24 @@ const MixerChannelItem = memo(function MixerChannelItem({
     else el.removeAttribute("mute");
     if (channel.solo) el.setAttribute("solo", "");
     else el.removeAttribute("solo");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channel]);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const hVolume = (e: Event) => onVolumeChange(channel.id, (e as CustomEvent).detail.volume);
-    const hPan = (e: Event) => onPanChange(channel.id, (e as CustomEvent).detail.pan);
+    const hVolume = (e: Event) =>
+      onVolumeChange(channel.id, (e as CustomEvent).detail.volume);
+    const hPan = (e: Event) =>
+      onPanChange(channel.id, (e as CustomEvent).detail.pan);
     const hMute = () => onToggleMute(channel.id);
     const hSolo = () => onToggleSolo(channel.id);
-    const hDelay = (e: Event) => onInsertDelay(channel.id, (e as CustomEvent).detail.enabled);
-    const hReverb = (e: Event) => onInsertReverb(channel.id, (e as CustomEvent).detail.enabled);
-    const hSend = (e: Event) => onSendLevel(channel.id, (e as CustomEvent).detail.level);
+    const hDelay = (e: Event) =>
+      onInsertDelay(channel.id, (e as CustomEvent).detail.enabled);
+    const hReverb = (e: Event) =>
+      onInsertReverb(channel.id, (e as CustomEvent).detail.enabled);
+    const hSend = (e: Event) =>
+      onSendLevel(channel.id, (e as CustomEvent).detail.level);
     el.addEventListener("volume-change", hVolume);
     el.addEventListener("pan-change", hPan);
     el.addEventListener("toggle-mute", hMute);
@@ -71,14 +95,28 @@ const MixerChannelItem = memo(function MixerChannelItem({
       el.removeEventListener("insert-reverb-change", hReverb);
       el.removeEventListener("send-level-change", hSend);
     };
-  }, [channel.id, onVolumeChange, onPanChange, onToggleMute, onToggleSolo, onInsertDelay, onInsertReverb, onSendLevel]);
+  }, [
+    channel.id,
+    onVolumeChange,
+    onPanChange,
+    onToggleMute,
+    onToggleSolo,
+    onInsertDelay,
+    onInsertReverb,
+    onSendLevel,
+  ]);
 
   // eslint-disable-next-line react-hooks/refs
-  return createElement("daw-mixer-channel", { ref, style: { width: "60px", flexShrink: "0" as const } });
+  return createElement("daw-mixer-channel", {
+    ref,
+    style: { width: "60px", flexShrink: "0" as const },
+  });
 });
 
 const MasterChannelItem = memo(function MasterChannelItem({
-  volume, meterLevel, onVolumeChange,
+  volume,
+  meterLevel,
+  onVolumeChange,
 }: {
   volume: number;
   meterLevel: number;
@@ -100,17 +138,23 @@ const MasterChannelItem = memo(function MasterChannelItem({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const hVolume = (e: Event) => onVolumeChange((e as CustomEvent).detail.volume);
+    const hVolume = (e: Event) =>
+      onVolumeChange((e as CustomEvent).detail.volume);
     el.addEventListener("volume-change", hVolume);
     return () => el.removeEventListener("volume-change", hVolume);
   }, [onVolumeChange]);
 
   // eslint-disable-next-line react-hooks/refs
-  return createElement("daw-mixer-channel", { ref, style: { width: "60px", flexShrink: "0" as const } });
+  return createElement("daw-mixer-channel", {
+    ref,
+    style: { width: "60px", flexShrink: "0" as const },
+  });
 });
 
 const BusChannelItem = memo(function BusChannelItem({
-  bus, onVolumeChange, onToggleMute,
+  bus,
+  onVolumeChange,
+  onToggleMute,
 }: {
   bus: BusData;
   onVolumeChange: (id: string, v: number) => void;
@@ -133,7 +177,8 @@ const BusChannelItem = memo(function BusChannelItem({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const hVolume = (e: Event) => onVolumeChange(bus.id, (e as CustomEvent).detail.volume);
+    const hVolume = (e: Event) =>
+      onVolumeChange(bus.id, (e as CustomEvent).detail.volume);
     const hMute = () => onToggleMute(bus.id);
     el.addEventListener("volume-change", hVolume);
     el.addEventListener("toggle-mute", hMute);
@@ -144,13 +189,28 @@ const BusChannelItem = memo(function BusChannelItem({
   }, [bus.id, onVolumeChange, onToggleMute]);
 
   // eslint-disable-next-line react-hooks/refs
-  return createElement("daw-mixer-channel", { ref, style: { width: "60px", flexShrink: "0" as const } });
+  return createElement("daw-mixer-channel", {
+    ref,
+    style: { width: "60px", flexShrink: "0" as const },
+  });
 });
 
-export function MixerPanel({ channels, buses, masterVolume, masterMeterLevel,
-  onVolumeChange, onPanChange, onToggleMute, onToggleSolo, onSetMasterVolume,
-  onInsertDelay, onInsertReverb, onSendLevel,
-  onBusVolume, onToggleBusMute }: {
+export function MixerPanel({
+  channels,
+  buses,
+  masterVolume,
+  masterMeterLevel,
+  onVolumeChange,
+  onPanChange,
+  onToggleMute,
+  onToggleSolo,
+  onSetMasterVolume,
+  onInsertDelay,
+  onInsertReverb,
+  onSendLevel,
+  onBusVolume,
+  onToggleBusMute,
+}: {
   channels: ChannelData[];
   buses: BusData[];
   masterVolume: number;
@@ -173,7 +233,10 @@ export function MixerPanel({ channels, buses, masterVolume, masterMeterLevel,
       </div>
       <div className="flex-1 overflow-x-auto p-1 flex items-start gap-0.5">
         {channels.map((ch, i) => (
-          <MixerChannelItem key={ch.id} channel={ch} index={i}
+          <MixerChannelItem
+            key={ch.id}
+            channel={ch}
+            index={i}
             onVolumeChange={onVolumeChange}
             onPanChange={onPanChange}
             onToggleMute={onToggleMute}
@@ -187,12 +250,21 @@ export function MixerPanel({ channels, buses, masterVolume, masterMeterLevel,
       {buses.length > 0 && (
         <div className="border-t border-border p-1 flex justify-center gap-0.5 shrink-0">
           {buses.map((bus) => (
-            <BusChannelItem key={bus.id} bus={bus} onVolumeChange={onBusVolume} onToggleMute={onToggleBusMute} />
+            <BusChannelItem
+              key={bus.id}
+              bus={bus}
+              onVolumeChange={onBusVolume}
+              onToggleMute={onToggleBusMute}
+            />
           ))}
         </div>
       )}
       <div className="border-t border-border p-1 flex justify-center shrink-0">
-        <MasterChannelItem volume={masterVolume} meterLevel={masterMeterLevel} onVolumeChange={onSetMasterVolume} />
+        <MasterChannelItem
+          volume={masterVolume}
+          meterLevel={masterMeterLevel}
+          onVolumeChange={onSetMasterVolume}
+        />
       </div>
     </div>
   );

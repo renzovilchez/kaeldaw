@@ -1,19 +1,26 @@
 import { encodeWav, type ExportResult } from "@kaeldaw/project/wav-export";
 import { useClipsStore } from "@kaeldaw/project/useClipsStore";
-import { useMixerStore, type MixerChannel } from "@kaeldaw/project/useMixerStore";
+import {
+  useMixerStore,
+  type MixerChannel,
+} from "@kaeldaw/project/useMixerStore";
 import { useTracksStore } from "@kaeldaw/project/useTracksStore";
 import { Transport } from "@kaeldaw/audio-engine/Transport";
-import { initWasmEffects, getDspModule, createWasmDelay, setWasmDelay, processWasmDelay, freeWasmDelay, createWasmReverb, setWasmReverb, processWasmReverb, freeWasmReverb } from "@kaeldaw/audio-engine/WasmEffects";
+import {
+  initWasmEffects,
+  getDspModule,
+  createWasmDelay,
+  setWasmDelay,
+  processWasmDelay,
+  freeWasmDelay,
+  createWasmReverb,
+  setWasmReverb,
+  processWasmReverb,
+  freeWasmReverb,
+} from "@kaeldaw/audio-engine/WasmEffects";
+import { buildMidiEvents, type MidiEvent } from "../shared/buildMidiEvents";
 
 export type ExportProgress = { percent: number; stage: string };
-
-interface MidiEvent {
-  tick: number;
-  note: number;
-  velocity: number;
-  type: "on" | "off";
-  trackId: string;
-}
 
 function createDelay(sr: number) {
   const h = createWasmDelay(sr, 2);
@@ -27,8 +34,15 @@ function createReverb(sr: number) {
   return h;
 }
 
-function processFxOnBuffer(buf: Float32Array, sr: number, insertDelay: boolean, insertReverb: boolean, totalSamples: number): void {
-  let dh = -1, rh = -1;
+function processFxOnBuffer(
+  buf: Float32Array,
+  sr: number,
+  insertDelay: boolean,
+  insertReverb: boolean,
+  totalSamples: number,
+): void {
+  let dh = -1,
+    rh = -1;
   if (insertDelay) dh = createDelay(sr);
   if (insertReverb) rh = createReverb(sr);
   for (let i = 0; i < totalSamples; i++) {
@@ -51,8 +65,9 @@ export async function renderProject(
   await initWasmEffects();
   const dsp = getDspModule();
   if (!dsp) throw new Error("Failed to load DSP engine");
-  const { setDspModule, PolySynth } = await import("@kaeldaw/instruments/PolySynth");
-  setDspModule(dsp as any);
+  const { setDspModule, PolySynth } =
+    await import("@kaeldaw/instruments/PolySynth");
+  setDspModule(dsp as Parameters<typeof setDspModule>[0]);
 
   onProgress?.({ percent: 2, stage: "Reading project..." });
 
@@ -69,43 +84,38 @@ export async function renderProject(
     channelMap.set(ch.id, ch);
   }
 
-const TICKS_PER_BEAT_VISUAL = 24;
-const VISUAL_TO_PPQN = Transport.ppqn / TICKS_PER_BEAT_VISUAL;
-
-  const events: MidiEvent[] = [];
-  for (const clip of clips) {
-    const ch = channelMap.get(clip.trackId);
-    if (ch?.mute) continue;
-    const offset = clip.startOffset ?? 0;
-    const clipEnd = clip.startTick + clip.durationTicks;
-    for (const note of clip.notes) {
-      const noteAbsStart = clip.startTick + note.startTick - offset;
-      const noteAbsEnd = noteAbsStart + note.durationTicks;
-      const clampedStart = Math.max(clip.startTick, noteAbsStart);
-      const clampedEnd = Math.min(clipEnd, noteAbsEnd);
-      if (clampedStart >= clampedEnd) continue;
-      events.push({ tick: clampedStart * VISUAL_TO_PPQN, note: note.note, velocity: note.velocity, type: "on", trackId: clip.trackId });
-      events.push({ tick: clampedEnd * VISUAL_TO_PPQN, note: note.note, velocity: 0, type: "off", trackId: clip.trackId });
-    }
-  }
-  events.sort((a, b) => a.tick - b.tick);
+  const events = buildMidiEvents(clips)
+    .filter((ev) => {
+      const ch = channelMap.get(ev.channelId);
+      return !ch?.mute;
+    })
+    .sort((a, b) => a.tick - b.tick);
 
   if (events.length === 0) {
     const empty = new Float32Array(sr);
-    const masterBlob = new Blob([encodeWav(empty, sr, 16)], { type: "audio/wav" });
-    return { master: masterBlob, tracks: new Map(), duration: 0, sampleRate: sr };
+    const masterBlob = new Blob([encodeWav(empty, sr, 16)], {
+      type: "audio/wav",
+    });
+    return {
+      master: masterBlob,
+      tracks: new Map(),
+      duration: 0,
+      sampleRate: sr,
+    };
   }
 
-  const soloChannels = new Set(channels.filter((ch) => ch.solo).map((ch) => ch.id));
+  const soloChannels = new Set(
+    channels.filter((ch) => ch.solo).map((ch) => ch.id),
+  );
   const hasSolo = soloChannels.size > 0;
 
   const trackEvents = new Map<string, MidiEvent[]>();
   for (const ev of events) {
-    if (hasSolo && !soloChannels.has(ev.trackId)) continue;
-    const ch = channelMap.get(ev.trackId);
+    if (hasSolo && !soloChannels.has(ev.channelId)) continue;
+    const ch = channelMap.get(ev.channelId);
     if (!ch || ch.mute) continue;
-    if (!trackEvents.has(ev.trackId)) trackEvents.set(ev.trackId, []);
-    trackEvents.get(ev.trackId)!.push(ev);
+    if (!trackEvents.has(ev.channelId)) trackEvents.set(ev.channelId, []);
+    trackEvents.get(ev.channelId)!.push(ev);
   }
 
   const lastTick = events[events.length - 1].tick;
@@ -133,13 +143,17 @@ const VISUAL_TO_PPQN = Transport.ppqn / TICKS_PER_BEAT_VISUAL;
     const ch = channelMap.get(trackId)!;
 
     onProgress?.({
-      percent: totalProgress + Math.round((trackIdx / trackEvents.size) * progressRange),
+      percent:
+        totalProgress +
+        Math.round((trackIdx / trackEvents.size) * progressRange),
       stage: `Rendering ${ch.name}...`,
     });
 
     const channelBuffer = new Float32Array(totalSamples * 2);
 
-    const trackData = useTracksStore.getState().tracks.find((t) => t.id === trackId);
+    const trackData = useTracksStore
+      .getState()
+      .tracks.find((t) => t.id === trackId);
     const isSampler = trackData?.presetEngine === "sampler";
     if (isSampler) {
       const { Sampler } = await import("@kaeldaw/instruments/Sampler");
@@ -150,7 +164,8 @@ const VISUAL_TO_PPQN = Transport.ppqn / TICKS_PER_BEAT_VISUAL;
         const data = SampleCache.get(sid);
         if (data) {
           const meta = SampleCache.getMeta(sid);
-          const rootNote = (ch as any).rootNote ?? 60;
+          const rootNote =
+            (ch as MixerChannel & { rootNote?: number }).rootNote ?? 60;
           sampler.setSample(data, meta?.sampleRate ?? sr, rootNote);
         }
       }
@@ -163,7 +178,9 @@ const VISUAL_TO_PPQN = Transport.ppqn / TICKS_PER_BEAT_VISUAL;
           if (ev.type === "on") sampler.noteOn(ev.note, ev.velocity);
           else sampler.noteOff(ev.note);
         }
-        const block = sampler.processBlock(Math.min(blockSize, totalSamples - s));
+        const block = sampler.processBlock(
+          Math.min(blockSize, totalSamples - s),
+        );
         for (let i = 0; i < block.length; i += 2) {
           const idx = s + i / 2;
           channelBuffer[idx * 2] += block[i];
@@ -196,7 +213,8 @@ const VISUAL_TO_PPQN = Transport.ppqn / TICKS_PER_BEAT_VISUAL;
     const chInsertDelay = ch.insertFx?.[0]?.enabled ?? false;
     const chInsertReverb = ch.insertFx?.[1]?.enabled ?? false;
     if (chInsertDelay || chInsertReverb) {
-      let dh = -1, rh = -1;
+      let dh = -1,
+        rh = -1;
       if (chInsertDelay) dh = createDelay(sr);
       if (chInsertReverb) rh = createReverb(sr);
       for (let i = 0; i < totalSamples; i++) {
@@ -210,7 +228,7 @@ const VISUAL_TO_PPQN = Transport.ppqn / TICKS_PER_BEAT_VISUAL;
       if (rh >= 0) freeWasmReverb(rh);
     }
 
-    const angle = (ch.pan + 1) * Math.PI / 4;
+    const angle = ((ch.pan + 1) * Math.PI) / 4;
     const panL = Math.cos(angle);
     const panR = Math.sin(angle);
     const vol = ch.volume;
@@ -243,8 +261,10 @@ const VISUAL_TO_PPQN = Transport.ppqn / TICKS_PER_BEAT_VISUAL;
     const buf = busBuffers.get(bus.id);
     if (!buf) continue;
 
-    const busInsertDelay = bus.insertFx?.find((f) => f.type === "delay")?.enabled ?? false;
-    const busInsertReverb = bus.insertFx?.find((f) => f.type === "reverb")?.enabled ?? false;
+    const busInsertDelay =
+      bus.insertFx?.find((f) => f.type === "delay")?.enabled ?? false;
+    const busInsertReverb =
+      bus.insertFx?.find((f) => f.type === "reverb")?.enabled ?? false;
     if (busInsertDelay || busInsertReverb) {
       processFxOnBuffer(buf, sr, busInsertDelay, busInsertReverb, totalSamples);
     }
@@ -264,7 +284,9 @@ const VISUAL_TO_PPQN = Transport.ppqn / TICKS_PER_BEAT_VISUAL;
 
   onProgress?.({ percent: 99, stage: "Encoding WAV..." });
 
-  const masterBlob = new Blob([encodeWav(masterBuffer, sr, 24, 2)], { type: "audio/wav" });
+  const masterBlob = new Blob([encodeWav(masterBuffer, sr, 24, 2)], {
+    type: "audio/wav",
+  });
 
   onProgress?.({ percent: 100, stage: "Done" });
 

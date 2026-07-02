@@ -1,15 +1,36 @@
 import { describe, it, expect } from "vitest";
 
-type MidiNote = { id: number; note: number; startTick: number; durationTicks: number; velocity: number };
+type MidiNote = {
+  id: number;
+  note: number;
+  startTick: number;
+  durationTicks: number;
+  velocity: number;
+};
 type Clip = { id: number; startTick: number; notes: MidiNote[] };
-type Event = { tick: number; type: "on" | "off"; note: number; velocity: number };
+type Event = {
+  tick: number;
+  type: "on" | "off";
+  note: number;
+  velocity: number;
+};
 
 function buildEvents(clips: Clip[]): Event[] {
   const events: Event[] = [];
   for (const clip of clips) {
     for (const n of clip.notes) {
-      events.push({ tick: clip.startTick + n.startTick, type: "on", note: n.note, velocity: n.velocity });
-      events.push({ tick: clip.startTick + n.startTick + n.durationTicks, type: "off", note: n.note, velocity: 0 });
+      events.push({
+        tick: clip.startTick + n.startTick,
+        type: "on",
+        note: n.note,
+        velocity: n.velocity,
+      });
+      events.push({
+        tick: clip.startTick + n.startTick + n.durationTicks,
+        type: "off",
+        note: n.note,
+        velocity: 0,
+      });
     }
   }
   events.sort((a, b) => a.tick - b.tick);
@@ -88,8 +109,20 @@ describe("MIDI scheduler", () => {
 
   it("multiples clips producen eventos mezclados ordenados", () => {
     const clips: Clip[] = [
-      { id: 1, startTick: 0, notes: [{ id: 1, note: 60, startTick: 0, durationTicks: 24, velocity: 100 }] },
-      { id: 2, startTick: 10, notes: [{ id: 2, note: 67, startTick: 0, durationTicks: 12, velocity: 90 }] },
+      {
+        id: 1,
+        startTick: 0,
+        notes: [
+          { id: 1, note: 60, startTick: 0, durationTicks: 24, velocity: 100 },
+        ],
+      },
+      {
+        id: 2,
+        startTick: 10,
+        notes: [
+          { id: 2, note: 67, startTick: 0, durationTicks: 12, velocity: 90 },
+        ],
+      },
     ];
     const events = buildEvents(clips);
     // noteOn@0, noteOn@10, noteOff@12, noteOff@24

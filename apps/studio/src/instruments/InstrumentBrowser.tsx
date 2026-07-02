@@ -1,14 +1,20 @@
 import { useSyncExternalStore, useCallback, useState } from "react";
-import { instrumentManager } from "../stores/useInstrumentStore";
-import { useWindowManager } from "../stores/useWindowManager";
+import { instrumentManager } from "../shared/instrumentManager";
+import { useWindowManager } from "../shared/components/useWindowManager";
 
-export function Sidebar({ width, onResize }: { width: number; onResize: (w: number) => void }) {
+export function InstrumentBrowser({
+  width,
+  onResize,
+}: {
+  width: number;
+  onResize: (w: number) => void;
+}) {
   const presets = useSyncExternalStore(
-    instrumentManager.subscribe,
+    instrumentManager.subscribe.bind(instrumentManager),
     () => instrumentManager.presets,
   );
   const selectedId = useSyncExternalStore(
-    instrumentManager.subscribe,
+    instrumentManager.subscribe.bind(instrumentManager),
     () => instrumentManager.selectedId,
   );
   const { open } = useWindowManager();
@@ -19,10 +25,13 @@ export function Sidebar({ width, onResize }: { width: number; onResize: (w: numb
     setCollapsed((prev) => ({ ...prev, [cat]: !prev[cat] }));
   }, []);
 
-  const handleSelect = useCallback((id: string) => {
-    instrumentManager.selectPreset(id);
-    open("synth-editor");
-  }, [open]);
+  const handleSelect = useCallback(
+    (id: string) => {
+      instrumentManager.selectPreset(id);
+      open("synth-editor");
+    },
+    [open],
+  );
 
   const handleLoadSample = useCallback(async () => {
     const input = document.createElement("input");
@@ -32,7 +41,8 @@ export function Sidebar({ width, onResize }: { width: number; onResize: (w: numb
       const file = input.files?.[0];
       if (!file) return;
       try {
-        const { SampleCache } = await import("@kaeldaw/instruments/SampleCache");
+        const { SampleCache } =
+          await import("@kaeldaw/instruments/SampleCache");
         const sampleId = await SampleCache.loadFromFile(file);
         const name = file.name.replace(/\.[^.]+$/, "");
         instrumentManager.saveCustomPreset(name, "sampler", sampleId);
@@ -43,22 +53,25 @@ export function Sidebar({ width, onResize }: { width: number; onResize: (w: numb
     input.click();
   }, []);
 
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
-    setResizing(true);
-    const startX = e.clientX;
-    const startW = width;
-    const onMove = (ev: MouseEvent) => {
-      const newW = Math.max(120, Math.min(400, startW + ev.clientX - startX));
-      onResize(newW);
-    };
-    const onUp = () => {
-      setResizing(false);
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
-    };
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
-  }, [width, onResize]);
+  const handleResizeStart = useCallback(
+    (e: React.MouseEvent) => {
+      setResizing(true);
+      const startX = e.clientX;
+      const startW = width;
+      const onMove = (ev: MouseEvent) => {
+        const newW = Math.max(120, Math.min(400, startW + ev.clientX - startX));
+        onResize(newW);
+      };
+      const onUp = () => {
+        setResizing(false);
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+      };
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+    },
+    [width, onResize],
+  );
 
   const groups: Record<string, typeof presets> = {};
   for (const p of presets) {
@@ -85,23 +98,24 @@ export function Sidebar({ width, onResize }: { width: number; onResize: (w: numb
               <span>{cat}</span>
               <span className="text-[#666] ml-auto">({items.length})</span>
             </div>
-            {!collapsed[cat] && items.map((p) => (
-              <div
-                key={p.id}
-                className={`flex items-center gap-2 px-3 py-1 cursor-pointer transition-colors ${
-                  p.id === selectedId
-                    ? "bg-[#3b82f6] text-white"
-                    : "hover:bg-[#3a3a3a] text-[#ccc]"
-                }`}
-                onClick={() => handleSelect(p.id)}
-              >
-                <span className="text-[13px]">{p.icon}</span>
-                <span className="truncate">{p.name}</span>
-                {p.engine === "sampler" && (
-                  <span className="text-[8px] text-[#999] ml-auto">SF</span>
-                )}
-              </div>
-            ))}
+            {!collapsed[cat] &&
+              items.map((p) => (
+                <div
+                  key={p.id}
+                  className={`flex items-center gap-2 px-3 py-1 cursor-pointer transition-colors ${
+                    p.id === selectedId
+                      ? "bg-[#3b82f6] text-white"
+                      : "hover:bg-[#3a3a3a] text-[#ccc]"
+                  }`}
+                  onClick={() => handleSelect(p.id)}
+                >
+                  <span className="text-[13px]">{p.icon}</span>
+                  <span className="truncate">{p.name}</span>
+                  {p.engine === "sampler" && (
+                    <span className="text-[8px] text-[#999] ml-auto">SF</span>
+                  )}
+                </div>
+              ))}
           </div>
         ))}
       </div>

@@ -14,5 +14,5 @@ export default defineConfig({
       "@kaeldaw/mixer": resolve(__dirname, "../../packages/mixer/src"),
     },
   },
-  test: { name: "@kaeldaw/studio", passWithNoTests: true, environment: "jsdom" },
+  test: { name: "@kaeldaw/studio", passWithNoTests: true, environment: "jsdom", exclude: ["e2e/**/*", "node_modules/**/*"] },
 });

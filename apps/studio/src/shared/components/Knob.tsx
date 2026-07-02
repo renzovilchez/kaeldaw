@@ -1,8 +1,19 @@
 import { useEffect, useRef, createElement } from "react";
 
-export function Knob({ value, min, max, size, label, onChange }: {
-  value: number; min: number; max: number; size?: number;
-  label?: string; onChange?: (v: number) => void;
+export function Knob({
+  value,
+  min,
+  max,
+  size,
+  label,
+  onChange,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  size?: number;
+  label?: string;
+  onChange?: (v: number) => void;
 }) {
   const ref = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -22,5 +33,8 @@ export function Knob({ value, min, max, size, label, onChange }: {
     if (label) el.setAttribute("label", label);
   });
   // eslint-disable-next-line react-hooks/refs
-  return createElement("daw-knob", { ref, style: { display: "inline-block" as const } });
+  return createElement("daw-knob", {
+    ref,
+    style: { display: "inline-block" as const },
+  });
 }

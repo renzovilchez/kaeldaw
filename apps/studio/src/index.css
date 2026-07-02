@@ -1,6 +1,8 @@
 @import "tailwindcss";
 
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   scrollbar-width: thin;
   scrollbar-color: #555 transparent;
 }
