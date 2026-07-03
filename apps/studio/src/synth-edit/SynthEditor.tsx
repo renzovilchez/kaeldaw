@@ -20,11 +20,14 @@ function SynthEditorInner() {
   );
   const [sampleFile, setSampleFile] = useState(preset?.sampleId ?? "");
   const [sampleDuration, setSampleDuration] = useState("");
+  const [isModified, setIsModified] = useState(false);
 
   const isSampler = preset?.engine === "sampler";
+  const isAlreadySaved = !isModified && preset?.id.startsWith("custom-");
 
   const updateConfig = useCallback((changes: Record<string, unknown>) => {
     setLocalConfig((prev) => ({ ...prev, ...changes }));
+    setIsModified(true);
     instrumentManager.updateConfig(changes);
   }, []);
 
@@ -140,9 +143,16 @@ function SynthEditorInner() {
       <div className="flex items-center gap-2 p-2 border-b border-[#4a4a4a] shrink-0">
         <select
           className="flex-1 bg-[#3a3a3a] border border-[#555] rounded px-2 py-1 text-[11px] text-[#ccc]"
-          value={preset?.id ?? ""}
-          onChange={(e) => instrumentManager.selectPreset(e.target.value)}
+          value={isModified ? "__custom__" : (preset?.id ?? "")}
+          onChange={(e) => {
+            if (e.target.value !== "__custom__") {
+              instrumentManager.selectPreset(e.target.value);
+            }
+          }}
         >
+          <option value="__custom__" disabled={!isModified} className={isModified ? "text-[#fbbf24]" : ""}>
+            {isModified ? "🔄 Custom" : "Custom"}
+          </option>
           {(() => {
             const groups: Record<string, typeof instrumentManager.presets> = {};
             for (const p of instrumentManager.presets) {
@@ -161,7 +171,12 @@ function SynthEditorInner() {
           })()}
         </select>
         <button
-          className="px-2 py-1 bg-[#4a4a4a] rounded text-[10px] hover:bg-[#555]"
+          className={`px-2 py-1 rounded text-[10px] transition-colors ${
+            isAlreadySaved
+              ? "bg-[#3a3a3a] text-[#666] cursor-not-allowed"
+              : "bg-[#4a4a4a] text-[#ccc] hover:bg-[#555]"
+          }`}
+          disabled={isAlreadySaved}
           onClick={handleSavePreset}
         >
           Save

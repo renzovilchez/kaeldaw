@@ -104,6 +104,7 @@ class InstrumentManager {
   private _selectedId = "";
   private _version = 0;
   private _listeners: Set<() => void> = new Set();
+  private _isModified = false;
 
   constructor() {
     this._presets = [...DEFAULT_PRESETS, ...loadCustomPresets()];
@@ -119,11 +120,15 @@ class InstrumentManager {
   get selectedPreset(): InstrumentPreset | undefined {
     return this._presets.find((p) => p.id === this._selectedId);
   }
+  get isModified(): boolean {
+    return this._isModified;
+  }
 
   selectPreset(id: string): void {
     const preset = this._presets.find((p) => p.id === id);
     if (!preset) return;
     this._selectedId = id;
+    this._isModified = false;
     if (preset.engine === "sampler") {
       const sampleData = preset.sampleId
         ? SampleCache.get(preset.sampleId)
@@ -153,7 +158,9 @@ class InstrumentManager {
 
   updateConfig(changes: Record<string, unknown>): void {
     PolySynthOutput.setConfig(changes);
+    this._isModified = true;
     this._version++;
+    this._notify();
   }
 
   saveCustomPreset(
@@ -172,6 +179,7 @@ class InstrumentManager {
     };
     this._presets.push(preset);
     this._selectedId = preset.id;
+    this._isModified = false;
     this._version++;
     this._notify();
     saveCustomPresets(this._presets.filter((p) => p.id.startsWith("custom-")));

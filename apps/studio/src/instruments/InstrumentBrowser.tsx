@@ -33,6 +33,13 @@ export function InstrumentBrowser({
     [open],
   );
 
+  const handleOpenSynth = useCallback(() => {
+    if (instrumentManager.selectedPreset?.engine !== "synth") {
+      instrumentManager.selectPreset("poly-saw");
+    }
+    open("synth-editor");
+  }, [open]);
+
   const handleLoadSample = useCallback(async () => {
     const input = document.createElement("input");
     input.type = "file";
@@ -75,9 +82,14 @@ export function InstrumentBrowser({
 
   const groups: Record<string, typeof presets> = {};
   for (const p of presets) {
+    if (p.category === "Synths") continue;
     if (!groups[p.category]) groups[p.category] = [];
     groups[p.category].push(p);
   }
+
+  const synthPresets = presets.filter((p) => p.category === "Synths");
+
+  const isSynthSelected = selectedId && synthPresets.some((p) => p.id === selectedId);
 
   return (
     <div
@@ -88,6 +100,29 @@ export function InstrumentBrowser({
         Instruments
       </div>
       <div className="flex-1 overflow-y-auto overflow-x-hidden text-[11px]">
+        <div>
+          <div
+            className="flex items-center gap-1 px-2 py-1 text-[10px] text-[#999] uppercase tracking-wider cursor-pointer hover:bg-[#3a3a3a] select-none"
+            onClick={() => toggleCategory("Synths")}
+          >
+            <span className="text-[8px]">{collapsed["Synths"] ? "▶" : "▼"}</span>
+            <span>Synths</span>
+            <span className="text-[#666] ml-auto">({synthPresets.length})</span>
+          </div>
+          {!collapsed["Synths"] && (
+            <div
+              className={`flex items-center gap-2 px-3 py-1 cursor-pointer transition-colors ${
+                isSynthSelected
+                  ? "bg-[#3b82f6] text-white"
+                  : "hover:bg-[#3a3a3a] text-[#ccc]"
+              }`}
+              onClick={handleOpenSynth}
+            >
+              <span className="text-[13px]">🎛</span>
+              <span className="truncate">Synth</span>
+            </div>
+          )}
+        </div>
         {Object.entries(groups).map(([cat, items]) => (
           <div key={cat}>
             <div

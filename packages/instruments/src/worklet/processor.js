@@ -55,39 +55,80 @@ function midiToFrequency(note) {
 class Oscillator {
   constructor(type) {
     this.phase = 0;
+    this.modPhase = 0;
     this.type = type;
+    this.ksDelay = null;
+    this.ksIndex = 0;
+    this.ksLength = 0;
   }
 
-  next(frequency, sampleRate) {
+  next(frequency, sampleRate, config) {
     if (frequency <= 0 || sampleRate <= 0) return 0;
     const increment = frequency / sampleRate;
     let output;
-    if (this.type === "sine") {
-      output = Math.sin(TAU * this.phase);
-    } else if (this.type === "saw") {
-      output = readTable(
-        SAW_TABLES[
-          pickTableIndex(
-            [512, 256, 128, 64, 32, 16, 8, 4, 2, 1],
-            frequency,
-            sampleRate,
-          )
-        ],
-        this.phase,
-      );
-    } else {
-      output = readTable(
-        SQUARE_TABLES[
-          pickTableIndex(
-            [511, 255, 127, 63, 31, 15, 7, 3, 1],
-            frequency,
-            sampleRate,
-          )
-        ],
-        this.phase,
-      );
+
+    switch (this.type) {
+      case "sine":
+        output = Math.sin(TAU * this.phase);
+        break;
+      case "saw":
+        output = readTable(
+          SAW_TABLES[pickTableIndex([512, 256, 128, 64, 32, 16, 8, 4, 2, 1], frequency, sampleRate)],
+          this.phase,
+        );
+        break;
+      case "square":
+        output = readTable(
+          SQUARE_TABLES[pickTableIndex([511, 255, 127, 63, 31, 15, 7, 3, 1], frequency, sampleRate)],
+          this.phase,
+        );
+        break;
+      case "triangle":
+        output = 2 * Math.abs(2 * this.phase - 1) - 1;
+        break;
+      case "noise":
+        output = Math.random() * 2 - 1;
+        break;
+      case "fm": {
+        const modRatio = config?.fmModRatio ?? 4.76;
+        const modLevel = config?.fmModLevel ?? 0.8;
+        const carRate = config?.fmCarRatio ?? 1;
+        const modFreq = frequency * modRatio;
+        const modInc = modFreq / sampleRate;
+        this.modPhase = (this.modPhase + modInc) % 1.0;
+        const modulator = Math.sin(TAU * this.modPhase) * modLevel * modFreq;
+        const carInc = (frequency * carRate + modulator) / sampleRate;
+        this.phase = (this.phase + carInc) % 1.0;
+        output = Math.sin(TAU * this.phase);
+        break;
+      }
+      case "pluck": {
+        if (!this.ksDelay) {
+          this.ksLength = Math.max(2, Math.round(sampleRate / frequency));
+          this.ksDelay = new Float32Array(this.ksLength);
+          for (let i = 0; i < this.ksLength; i++)
+            this.ksDelay[i] = Math.random() * 2 - 1;
+          this.ksIndex = 0;
+        }
+        const current = this.ksDelay[this.ksIndex];
+        const nextIdx = (this.ksIndex + 1) % this.ksLength;
+        const nextSample = this.ksDelay[nextIdx];
+        const damping = config?.pluckDamping ?? 0.5;
+        const filtered = current + damping * (nextSample - current);
+        this.ksDelay[this.ksIndex] = filtered * 0.996;
+        this.ksIndex = nextIdx;
+        output = current;
+        break;
+      }
+      default:
+        output = readTable(
+          SQUARE_TABLES[pickTableIndex([511, 255, 127, 63, 31, 15, 7, 3, 1], frequency, sampleRate)],
+          this.phase,
+        );
     }
-    this.phase = (this.phase + increment) % 1.0;
+
+    if (this.type !== "fm" && this.type !== "pluck")
+      this.phase = (this.phase + increment) % 1.0;
     return output;
   }
 }
@@ -479,7 +520,7 @@ class Synth {
       if (frequency <= 0 || !isFinite(frequency)) continue;
 
       const oscillatorOutput =
-        voice.oscillator.next(frequency, this.sampleRate) || 0;
+        voice.oscillator.next(frequency, this.sampleRate, this.config) || 0;
       const filterOutput = voice.filter.run(oscillatorOutput) || 0;
       const amplitude = voice.adsr.tick(this.deltaTime) || 0;
       let sampleValue = filterOutput * amplitude * voice.velocity * volume;
