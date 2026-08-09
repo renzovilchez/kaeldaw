@@ -13,7 +13,6 @@ const REVERB_MIX: f32 = 0.3;
 const REVERB_DAMPING: f32 = 0.5;
 
 struct MixerChannel {
-    id: String,
     volume: f32,
     pan: f32,
     mute: bool,
@@ -22,11 +21,10 @@ struct MixerChannel {
     insert_reverb: bool,
     delay_handle: u32,
     reverb_handle: u32,
-    sends: Vec<(String, f32)>,
+    sends: Vec<(u32, f32)>,
 }
 
 struct MixerBus {
-    id: String,
     volume: f32,
     insert_delay: bool,
     insert_reverb: bool,
@@ -43,6 +41,8 @@ pub struct Mixer {
     master_left: f32,
     master_right: f32,
     bus_accum: Vec<f32>,
+    last_left: f32,
+    last_right: f32,
 }
 
 #[wasm_bindgen]
@@ -57,6 +57,8 @@ impl Mixer {
             master_left: 0.0,
             master_right: 0.0,
             bus_accum: Vec::new(),
+            last_left: 0.0,
+            last_right: 0.0,
         }
     }
 
@@ -64,12 +66,9 @@ impl Mixer {
         self.master_volume = volume.clamp(0.0, 2.0);
     }
 
-    pub fn add_channel(&mut self, id: &str) {
-        if self.channels.iter().any(|c| c.id == id) {
-            return;
-        }
+    pub fn add_channel(&mut self) -> u32 {
+        let index = self.channels.len() as u32;
         self.channels.push(MixerChannel {
-            id: id.to_string(),
             volume: 0.8,
             pan: 0.0,
             mute: false,
@@ -80,47 +79,50 @@ impl Mixer {
             reverb_handle: NO_HANDLE,
             sends: Vec::new(),
         });
+        index
     }
 
-    pub fn remove_channel(&mut self, id: &str) {
-        if let Some(idx) = self.channels.iter().position(|c| c.id == id) {
-            let ch = &self.channels[idx];
-            if ch.delay_handle != NO_HANDLE {
-                delay_free(ch.delay_handle);
-            }
-            if ch.reverb_handle != NO_HANDLE {
-                reverb_free(ch.reverb_handle);
-            }
-            self.channels.remove(idx);
+    pub fn remove_channel(&mut self, index: u32) {
+        let idx = index as usize;
+        if idx >= self.channels.len() {
+            return;
         }
+        let ch = &self.channels[idx];
+        if ch.delay_handle != NO_HANDLE {
+            delay_free(ch.delay_handle);
+        }
+        if ch.reverb_handle != NO_HANDLE {
+            reverb_free(ch.reverb_handle);
+        }
+        self.channels.remove(idx);
     }
 
-    pub fn set_channel_volume(&mut self, id: &str, volume: f32) {
-        if let Some(ch) = self.channels.iter_mut().find(|c| c.id == id) {
+    pub fn set_channel_volume(&mut self, index: u32, volume: f32) {
+        if let Some(ch) = self.channels.get_mut(index as usize) {
             ch.volume = volume.clamp(0.0, 2.0);
         }
     }
 
-    pub fn set_channel_pan(&mut self, id: &str, pan: f32) {
-        if let Some(ch) = self.channels.iter_mut().find(|c| c.id == id) {
+    pub fn set_channel_pan(&mut self, index: u32, pan: f32) {
+        if let Some(ch) = self.channels.get_mut(index as usize) {
             ch.pan = pan.clamp(-1.0, 1.0);
         }
     }
 
-    pub fn set_channel_mute(&mut self, id: &str, mute: bool) {
-        if let Some(ch) = self.channels.iter_mut().find(|c| c.id == id) {
+    pub fn set_channel_mute(&mut self, index: u32, mute: bool) {
+        if let Some(ch) = self.channels.get_mut(index as usize) {
             ch.mute = mute;
         }
     }
 
-    pub fn set_channel_solo(&mut self, id: &str, solo: bool) {
-        if let Some(ch) = self.channels.iter_mut().find(|c| c.id == id) {
+    pub fn set_channel_solo(&mut self, index: u32, solo: bool) {
+        if let Some(ch) = self.channels.get_mut(index as usize) {
             ch.solo = solo;
         }
     }
 
-    pub fn set_channel_insert_delay(&mut self, id: &str, enabled: bool) {
-        if let Some(ch) = self.channels.iter_mut().find(|c| c.id == id) {
+    pub fn set_channel_insert_delay(&mut self, index: u32, enabled: bool) {
+        if let Some(ch) = self.channels.get_mut(index as usize) {
             ch.insert_delay = enabled;
             if enabled && ch.delay_handle == NO_HANDLE {
                 let handle = delay_init(self.sample_rate, 2.0);
@@ -130,8 +132,8 @@ impl Mixer {
         }
     }
 
-    pub fn set_channel_insert_reverb(&mut self, id: &str, enabled: bool) {
-        if let Some(ch) = self.channels.iter_mut().find(|c| c.id == id) {
+    pub fn set_channel_insert_reverb(&mut self, index: u32, enabled: bool) {
+        if let Some(ch) = self.channels.get_mut(index as usize) {
             ch.insert_reverb = enabled;
             if enabled && ch.reverb_handle == NO_HANDLE {
                 let handle = reverb_init(self.sample_rate);
@@ -141,23 +143,24 @@ impl Mixer {
         }
     }
 
-    pub fn set_channel_send(&mut self, id: &str, bus_id: &str, level: f32) {
-        if let Some(ch) = self.channels.iter_mut().find(|c| c.id == id) {
-            let level = level.clamp(0.0, 1.0);
-            if let Some(send) = ch.sends.iter_mut().find(|s| s.0 == bus_id) {
-                send.1 = level;
-            } else {
-                ch.sends.push((bus_id.to_string(), level));
-            }
+    pub fn set_channel_send(&mut self, channel_index: u32, bus_index: u32, level: f32) {
+        let ch_idx = channel_index as usize;
+        let bus_idx = bus_index as usize;
+        if ch_idx >= self.channels.len() || bus_idx >= self.buses.len() {
+            return;
+        }
+        let ch = &mut self.channels[ch_idx];
+        let level = level.clamp(0.0, 1.0);
+        if let Some(send) = ch.sends.iter_mut().find(|s| s.0 == bus_index) {
+            send.1 = level;
+        } else {
+            ch.sends.push((bus_index, level));
         }
     }
 
-    pub fn add_bus(&mut self, id: &str) {
-        if self.buses.iter().any(|b| b.id == id) {
-            return;
-        }
+    pub fn add_bus(&mut self) -> u32 {
+        let index = self.buses.len() as u32;
         self.buses.push(MixerBus {
-            id: id.to_string(),
             volume: 0.8,
             insert_delay: false,
             insert_reverb: false,
@@ -165,30 +168,33 @@ impl Mixer {
             reverb_handle: NO_HANDLE,
         });
         self.bus_accum.push(0.0);
+        index
     }
 
-    pub fn remove_bus(&mut self, id: &str) {
-        if let Some(idx) = self.buses.iter().position(|b| b.id == id) {
-            let bus = &self.buses[idx];
-            if bus.delay_handle != NO_HANDLE {
-                delay_free(bus.delay_handle);
-            }
-            if bus.reverb_handle != NO_HANDLE {
-                reverb_free(bus.reverb_handle);
-            }
-            self.buses.remove(idx);
-            self.bus_accum.remove(idx);
+    pub fn remove_bus(&mut self, index: u32) {
+        let idx = index as usize;
+        if idx >= self.buses.len() {
+            return;
         }
+        let bus = &self.buses[idx];
+        if bus.delay_handle != NO_HANDLE {
+            delay_free(bus.delay_handle);
+        }
+        if bus.reverb_handle != NO_HANDLE {
+            reverb_free(bus.reverb_handle);
+        }
+        self.buses.remove(idx);
+        self.bus_accum.remove(idx);
     }
 
-    pub fn set_bus_volume(&mut self, id: &str, volume: f32) {
-        if let Some(bus) = self.buses.iter_mut().find(|b| b.id == id) {
+    pub fn set_bus_volume(&mut self, index: u32, volume: f32) {
+        if let Some(bus) = self.buses.get_mut(index as usize) {
             bus.volume = volume.clamp(0.0, 2.0);
         }
     }
 
-    pub fn set_bus_insert_delay(&mut self, id: &str, enabled: bool) {
-        if let Some(bus) = self.buses.iter_mut().find(|b| b.id == id) {
+    pub fn set_bus_insert_delay(&mut self, index: u32, enabled: bool) {
+        if let Some(bus) = self.buses.get_mut(index as usize) {
             bus.insert_delay = enabled;
             if enabled && bus.delay_handle == NO_HANDLE {
                 let handle = delay_init(self.sample_rate, 2.0);
@@ -198,8 +204,8 @@ impl Mixer {
         }
     }
 
-    pub fn set_bus_insert_reverb(&mut self, id: &str, enabled: bool) {
-        if let Some(bus) = self.buses.iter_mut().find(|b| b.id == id) {
+    pub fn set_bus_insert_reverb(&mut self, index: u32, enabled: bool) {
+        if let Some(bus) = self.buses.get_mut(index as usize) {
             bus.insert_reverb = enabled;
             if enabled && bus.reverb_handle == NO_HANDLE {
                 let handle = reverb_init(self.sample_rate);
@@ -209,11 +215,16 @@ impl Mixer {
         }
     }
 
-    pub fn process_channel(&mut self, id: &str, left: f32, right: f32) {
-        let has_solo = self.channels.iter().any(|c| c.solo);
-        let Some(idx) = self.channels.iter().position(|c| c.id == id) else {
+    pub fn process_channel_index(&mut self, index: u32, left: f32, right: f32) {
+        let idx = index as usize;
+        if idx >= self.channels.len() {
             return;
-        };
+        }
+        self.process_channel_at(idx, left, right);
+    }
+
+    fn process_channel_at(&mut self, idx: usize, left: f32, right: f32) {
+        let has_solo = self.channels.iter().any(|c| c.solo);
         if self.channels[idx].mute {
             return;
         }
@@ -237,17 +248,18 @@ impl Mixer {
         self.master_right += out_r * vol * pan_r;
 
         let sends = self.channels[idx].sends.clone();
-        for (bus_id, level) in sends {
+        for (bus_index, level) in sends {
             if level <= 0.0 {
                 continue;
             }
-            if let Some(bi) = self.buses.iter().position(|b| b.id == bus_id) {
+            let bi = bus_index as usize;
+            if bi < self.buses.len() {
                 self.bus_accum[bi] += (out_l + out_r) * 0.5 * level;
             }
         }
     }
 
-    pub fn finish_frame(&mut self) -> Vec<f32> {
+    pub fn finish_frame(&mut self) {
         let mut left = self.master_left;
         let mut right = self.master_right;
         self.master_left = 0.0;
@@ -266,7 +278,16 @@ impl Mixer {
             right += out * bus.volume;
         }
 
-        vec![left * self.master_volume, right * self.master_volume]
+        self.last_left = left * self.master_volume;
+        self.last_right = right * self.master_volume;
+    }
+
+    pub fn get_master_left(&self) -> f32 {
+        self.last_left
+    }
+
+    pub fn get_master_right(&self) -> f32 {
+        self.last_right
     }
 }
 
@@ -299,21 +320,21 @@ mod tests {
 
     fn mixer() -> Mixer {
         let mut m = Mixer::new(SR);
-        m.add_channel("a");
-        m.add_channel("b");
+        m.add_channel();
+        m.add_channel();
         m
     }
 
     fn frame(m: &mut Mixer) -> (f32, f32) {
-        let out = m.finish_frame();
-        (out[0], out[1])
+        m.finish_frame();
+        (m.get_master_left(), m.get_master_right())
     }
 
     #[test]
     fn silence_in_silence_out() {
         let mut m = mixer();
         m.set_master_volume(1.0);
-        m.set_channel_volume("a", 1.0);
+        m.set_channel_volume(0, 1.0);
         let (l, r) = frame(&mut m);
         assert_eq!(l, 0.0);
         assert_eq!(r, 0.0);
@@ -323,9 +344,9 @@ mod tests {
     fn center_pan_is_equal() {
         let mut m = mixer();
         m.set_master_volume(1.0);
-        m.set_channel_volume("a", 1.0);
-        m.set_channel_pan("a", 0.0);
-        m.process_channel("a", 0.5, 0.5);
+        m.set_channel_volume(0, 1.0);
+        m.set_channel_pan(0, 0.0);
+        m.process_channel_index(0, 0.5, 0.5);
         let (l, r) = frame(&mut m);
         assert!((l - r).abs() < 0.0001, "center pan must be equal, l={} r={}", l, r);
     }
@@ -334,9 +355,9 @@ mod tests {
     fn hard_left_pan_is_louder_left() {
         let mut m = mixer();
         m.set_master_volume(1.0);
-        m.set_channel_volume("a", 1.0);
-        m.set_channel_pan("a", -1.0);
-        m.process_channel("a", 1.0, 1.0);
+        m.set_channel_volume(0, 1.0);
+        m.set_channel_pan(0, -1.0);
+        m.process_channel_index(0, 1.0, 1.0);
         let (l, r) = frame(&mut m);
         assert!(l > r, "hard left pan: l={} r={}", l, r);
     }
@@ -345,9 +366,9 @@ mod tests {
     fn hard_right_pan_is_louder_right() {
         let mut m = mixer();
         m.set_master_volume(1.0);
-        m.set_channel_volume("a", 1.0);
-        m.set_channel_pan("a", 1.0);
-        m.process_channel("a", 1.0, 1.0);
+        m.set_channel_volume(0, 1.0);
+        m.set_channel_pan(0, 1.0);
+        m.process_channel_index(0, 1.0, 1.0);
         let (l, r) = frame(&mut m);
         assert!(r > l, "hard right pan: l={} r={}", l, r);
     }
@@ -356,10 +377,10 @@ mod tests {
     fn two_channels_sum() {
         let mut m = mixer();
         m.set_master_volume(1.0);
-        m.set_channel_volume("a", 1.0);
-        m.set_channel_volume("b", 1.0);
-        m.process_channel("a", 0.5, 0.5);
-        m.process_channel("b", 0.5, 0.5);
+        m.set_channel_volume(0, 1.0);
+        m.set_channel_volume(1, 1.0);
+        m.process_channel_index(0, 0.5, 0.5);
+        m.process_channel_index(1, 0.5, 0.5);
         let (l, _) = frame(&mut m);
         assert!(l > 0.5, "two channels should sum, l={}", l);
     }
@@ -368,9 +389,9 @@ mod tests {
     fn mute_silences_channel() {
         let mut m = mixer();
         m.set_master_volume(1.0);
-        m.set_channel_volume("a", 1.0);
-        m.set_channel_mute("a", true);
-        m.process_channel("a", 1.0, 1.0);
+        m.set_channel_volume(0, 1.0);
+        m.set_channel_mute(0, true);
+        m.process_channel_index(0, 1.0, 1.0);
         let (l, _) = frame(&mut m);
         assert_eq!(l, 0.0);
     }
@@ -379,25 +400,24 @@ mod tests {
     fn solo_isolates_soloed_channel() {
         let mut m = mixer();
         m.set_master_volume(1.0);
-        m.set_channel_volume("a", 1.0);
-        m.set_channel_volume("b", 1.0);
-        m.set_channel_solo("a", true);
-        m.process_channel("a", 1.0, 1.0);
-        m.process_channel("b", 1.0, 1.0);
+        m.set_channel_volume(0, 1.0);
+        m.set_channel_volume(1, 1.0);
+        m.set_channel_solo(0, true);
+        m.process_channel_index(0, 1.0, 1.0);
+        m.process_channel_index(1, 1.0, 1.0);
         let (l, _) = frame(&mut m);
-        let solo = l;
-        assert!(solo.abs() > 0.0, "soloed channel should be audible");
+        assert!(l.abs() > 0.0, "soloed channel should be audible");
     }
 
     #[test]
     fn send_reaches_bus() {
         let mut m = mixer();
         m.set_master_volume(1.0);
-        m.set_channel_volume("a", 1.0);
-        m.add_bus("reverb-bus");
-        m.set_bus_volume("reverb-bus", 1.0);
-        m.set_channel_send("a", "reverb-bus", 1.0);
-        m.process_channel("a", 0.5, 0.5);
+        m.set_channel_volume(0, 1.0);
+        m.add_bus();
+        m.set_bus_volume(0, 1.0);
+        m.set_channel_send(0, 0, 1.0);
+        m.process_channel_index(0, 0.5, 0.5);
         let (l, _) = frame(&mut m);
         assert!(l.abs() > 0.0, "send to bus should add to master");
     }
@@ -406,14 +426,14 @@ mod tests {
     fn master_volume_scales() {
         let mut low = mixer();
         low.set_master_volume(0.5);
-        low.set_channel_volume("a", 1.0);
-        low.process_channel("a", 0.4, 0.4);
+        low.set_channel_volume(0, 1.0);
+        low.process_channel_index(0, 0.4, 0.4);
         let (ll, _) = frame(&mut low);
 
         let mut high = mixer();
         high.set_master_volume(1.0);
-        high.set_channel_volume("a", 1.0);
-        high.process_channel("a", 0.4, 0.4);
+        high.set_channel_volume(0, 1.0);
+        high.process_channel_index(0, 0.4, 0.4);
         let (hl, _) = frame(&mut high);
 
         assert!(
@@ -428,7 +448,7 @@ mod tests {
     fn unknown_channel_is_ignored() {
         let mut m = mixer();
         m.set_master_volume(1.0);
-        m.process_channel("nope", 1.0, 1.0);
+        m.process_channel_index(99, 1.0, 1.0);
         let (l, r) = frame(&mut m);
         assert_eq!(l, 0.0);
         assert_eq!(r, 0.0);
@@ -438,21 +458,19 @@ mod tests {
     fn insert_delay_does_not_crash() {
         let mut m = mixer();
         m.set_master_volume(1.0);
-        m.set_channel_volume("a", 1.0);
-        m.set_channel_insert_delay("a", true);
-        m.process_channel("a", 1.0, 1.0);
+        m.set_channel_volume(0, 1.0);
+        m.set_channel_insert_delay(0, true);
+        m.process_channel_index(0, 1.0, 1.0);
         let (l, _) = frame(&mut m);
         assert!(l.abs() > 0.0);
     }
 
     #[test]
-    fn add_duplicate_channel_is_noop() {
-        let mut m = mixer();
-        m.add_channel("a");
-        m.set_channel_volume("a", 1.0);
-        m.set_master_volume(1.0);
-        m.process_channel("a", 1.0, 1.0);
-        let (l, _) = frame(&mut m);
-        assert!(l.abs() > 0.0);
+    fn add_duplicate_channel_returns_new_index() {
+        let mut m = Mixer::new(SR);
+        let a = m.add_channel();
+        let b = m.add_channel();
+        assert_eq!(a, 0);
+        assert_eq!(b, 1);
     }
 }

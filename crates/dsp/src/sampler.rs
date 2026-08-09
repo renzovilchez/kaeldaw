@@ -62,18 +62,15 @@ impl Sampler {
         }
     }
 
-    pub fn set_sample(&mut self, buffer: &[f32], buffer_sample_rate: f32, root_note: u32) {
-        self.buffer = buffer.to_vec();
+    pub fn set_sample_ptr(&mut self, ptr: usize, len: usize, buffer_sample_rate: f32, root_note: u32) {
+        let src = unsafe { std::slice::from_raw_parts(ptr as *const f32, len) };
+        self.buffer = src.to_vec();
         self.buffer_sample_rate = buffer_sample_rate;
         self.root_note = root_note;
     }
 
-    pub fn set_config(&mut self, config_json: &str) {
-        let volume = serde_json::from_str::<serde_json::Value>(config_json)
-            .ok()
-            .and_then(|v| v.get("volume").and_then(|x| x.as_f64()))
-            .unwrap_or(0.5);
-        self.volume = volume.clamp(0.0, 2.0) as f32;
+    pub fn set_volume(&mut self, volume: f32) {
+        self.volume = volume.clamp(0.0, 2.0);
     }
 
     pub fn has_sample(&self) -> bool {
@@ -231,6 +228,10 @@ mod tests {
         vec![1.0f32; 4800]
     }
 
+    fn set_sample(sampler: &mut Sampler, data: &[f32], sample_rate: f32, root_note: u32) {
+        sampler.set_sample_ptr(data.as_ptr() as usize, data.len(), sample_rate, root_note);
+    }
+
     #[test]
     fn new_sampler_has_no_sample() {
         let sampler = Sampler::new(SR);
@@ -241,7 +242,7 @@ mod tests {
     #[test]
     fn note_on_plays_impulse() {
         let mut sampler = Sampler::new(SR);
-        sampler.set_sample(&impulse(), SR, 60);
+        set_sample(&mut sampler, &impulse(), SR, 60);
         sampler.note_on(60.0, 100.0);
         assert_eq!(sampler.active_voices(), 1);
         let samples: Vec<f32> = (0..4800).map(|_| sampler.process_sample()).collect();
@@ -251,10 +252,10 @@ mod tests {
     #[test]
     fn higher_note_plays_faster() {
         let mut low = Sampler::new(SR);
-        low.set_sample(&ramp(), SR, 60);
+        set_sample(&mut low, &ramp(), SR, 60);
         low.note_on(60.0, 100.0);
         let mut high = Sampler::new(SR);
-        high.set_sample(&ramp(), SR, 60);
+        set_sample(&mut high, &ramp(), SR, 60);
         high.note_on(72.0, 100.0);
 
         let mut low_val = 0.0;
@@ -274,7 +275,7 @@ mod tests {
     #[test]
     fn note_off_releases_voice() {
         let mut sampler = Sampler::new(SR);
-        sampler.set_sample(&impulse(), SR, 60);
+        set_sample(&mut sampler, &impulse(), SR, 60);
         sampler.note_on(60.0, 100.0);
         for _ in 0..100 {
             sampler.process_sample();
@@ -293,7 +294,7 @@ mod tests {
     #[test]
     fn all_notes_off_silences() {
         let mut sampler = Sampler::new(SR);
-        sampler.set_sample(&impulse(), SR, 60);
+        set_sample(&mut sampler, &impulse(), SR, 60);
         sampler.note_on(60.0, 100.0);
         sampler.note_on(64.0, 100.0);
         sampler.all_notes_off();
@@ -314,7 +315,7 @@ mod tests {
     #[test]
     fn polyphony_limited_to_max_voices() {
         let mut sampler = Sampler::new(SR);
-        sampler.set_sample(&impulse(), SR, 60);
+        set_sample(&mut sampler, &impulse(), SR, 60);
         for i in 0..20 {
             sampler.note_on(60.0 + (i % 24) as f32, 100.0);
         }
@@ -324,7 +325,7 @@ mod tests {
     #[test]
     fn process_block_returns_interleaved() {
         let mut sampler = Sampler::new(SR);
-        sampler.set_sample(&impulse(), SR, 60);
+        set_sample(&mut sampler, &impulse(), SR, 60);
         sampler.note_on(60.0, 100.0);
         let block = sampler.process_block(64);
         assert_eq!(block.len(), 128);
@@ -336,8 +337,8 @@ mod tests {
     #[test]
     fn set_config_volume() {
         let mut sampler = Sampler::new(SR);
-        sampler.set_config(r#"{"volume":1}"#);
-        sampler.set_sample(&dc(), SR, 60);
+        sampler.set_volume(1.0);
+        set_sample(&mut sampler, &dc(), SR, 60);
         sampler.note_on(60.0, 127.0);
         let mut peak = 0.0f32;
         for _ in 0..4800 {

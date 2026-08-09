@@ -10,8 +10,8 @@ class MockSampler {
   constructor(sr: number) {
     this._sr = sr;
   }
-  set_sample(data: Float32Array, _sr: number, rootNote: number) {
-    this._buf = data;
+  set_sample_ptr(_ptr: number, len: number, _sr: number, rootNote: number) {
+    this._buf = new Float32Array(len);
     this._root = rootNote;
   }
   has_sample() {
@@ -44,7 +44,12 @@ class MockSampler {
   }
 }
 
-const mockDsp = { Sampler: MockSampler };
+const mockDsp = {
+  Sampler: MockSampler,
+  dsp_alloc: () => 0,
+  dsp_free: () => {},
+  dsp_memory: () => ({ buffer: new ArrayBuffer(1024) }),
+};
 
 vi.mock("kaeldaw-dsp", () => mockDsp);
 

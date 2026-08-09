@@ -17,42 +17,52 @@ class MockPolySynth {
   _voices: MockVoice[] = [];
   _age = 0;
   _cfg: Record<string, unknown>;
-  constructor(sr: number, configJson: string) {
+  constructor(sr: number, polyphony = 8) {
     this._sr = sr;
-    this._cfg = Object.assign(
-      {
-        oscillatorType: 1,
-        filterCutoff: 8000,
-        filterResonance: 0.1,
-        ampEnvAttack: 0.01,
-        ampEnvDecay: 0.1,
-        ampEnvSustain: 0.7,
-        ampEnvRelease: 0.3,
-        volume: 0.5,
-        polyphony: 8,
-        pitchEnvAmount: 0,
-        pitchEnvAttack: 0,
-        lfoRate: 0,
-        lfoDepth: 0,
-        lfoTarget: "none",
-        fmModRatio: 1,
-        fmModLevel: 0,
-        fmCarRatio: 1,
-        pluckDamping: 0.5,
-      },
-      JSON.parse(configJson || "{}"),
-    );
-    const n = Math.max(1, (this._cfg.polyphony as number) | 0);
+    this._cfg = {
+      oscillatorType: 1,
+      filterCutoff: 8000,
+      filterResonance: 0.1,
+      ampEnvAttack: 0.01,
+      ampEnvDecay: 0.1,
+      ampEnvSustain: 0.7,
+      ampEnvRelease: 0.3,
+      volume: 0.5,
+      polyphony,
+      pitchEnvAmount: 0,
+      pitchEnvAttack: 0,
+      lfoRate: 0,
+      lfoDepth: 0,
+      lfoTarget: 0,
+      fmModRatio: 1,
+      fmModLevel: 0,
+      fmCarRatio: 1,
+      pluckDamping: 0.5,
+    };
+    const n = Math.max(1, polyphony | 0);
     for (let i = 0; i < n; i++) {
       this._voices.push({ on: false, note: 0, vel: 0, ph: 0, age: 0, env: 0, envState: 0, envT: 0, envRl: 0 });
     }
   }
-  set_config(json: string) {
-    Object.assign(this._cfg, JSON.parse(json || "{}"));
+  set_oscillator_type(kind: number) { this._cfg.oscillatorType = kind; }
+  set_oscillator_detune(v: number) { this._cfg.oscillatorDetune = v; }
+  set_filter_cutoff(v: number) { this._cfg.filterCutoff = v; }
+  set_filter_resonance(v: number) { this._cfg.filterResonance = v; }
+  set_amp_env(a: number, d: number, s: number, r: number) {
+    this._cfg.ampEnvAttack = a; this._cfg.ampEnvDecay = d;
+    this._cfg.ampEnvSustain = s; this._cfg.ampEnvRelease = r;
   }
-  get_config() {
-    return JSON.stringify(this._cfg);
+  set_volume(v: number) { this._cfg.volume = v; }
+  set_pitch_env(amount: number, attack: number) {
+    this._cfg.pitchEnvAmount = amount; this._cfg.pitchEnvAttack = attack;
   }
+  set_lfo(rate: number, depth: number, target: number) {
+    this._cfg.lfoRate = rate; this._cfg.lfoDepth = depth; this._cfg.lfoTarget = target;
+  }
+  set_fm(mr: number, ml: number, cr: number) {
+    this._cfg.fmModRatio = mr; this._cfg.fmModLevel = ml; this._cfg.fmCarRatio = cr;
+  }
+  set_pluck_damping(v: number) { this._cfg.pluckDamping = v; }
   _alloc(): MockVoice {
     const free = this._voices.find((v) => !v.on);
     if (free) return free;

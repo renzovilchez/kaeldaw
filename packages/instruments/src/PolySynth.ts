@@ -49,6 +49,13 @@ const OSC_KIND: Record<OscillatorType, number> = {
   pluck: 6,
 };
 
+const LFO_TARGET: Record<SynthVoiceConfig["lfoTarget"], number> = {
+  none: 0,
+  pitch: 1,
+  filter: 2,
+  volume: 3,
+};
+
 const DEFAULT_CONFIG: SynthVoiceConfig = {
   oscillatorType: "saw",
   oscillatorDetune: 0,
@@ -78,7 +85,8 @@ export class PolySynth {
   constructor(sampleRate: number, config?: Partial<SynthVoiceConfig>) {
     this._config = { ...DEFAULT_CONFIG, ...config };
     const mod = dsp();
-    this._synth = new mod.PolySynth(sampleRate, this._serializeConfig());
+    this._synth = new mod.PolySynth(sampleRate, this._config.polyphony);
+    this._applyConfig();
   }
 
   get activeVoices(): number {
@@ -103,7 +111,7 @@ export class PolySynth {
 
   setConfig(config: Partial<SynthVoiceConfig>) {
     this._config = { ...this._config, ...config };
-    this._synth.set_config(this._serializeConfig());
+    this._applyConfig();
   }
 
   getConfig(): SynthVoiceConfig {
@@ -123,27 +131,22 @@ export class PolySynth {
     this._synth.free();
   }
 
-  private _serializeConfig(): string {
-    return JSON.stringify({
-      oscillatorType: OSC_KIND[this._config.oscillatorType],
-      oscillatorDetune: this._config.oscillatorDetune,
-      filterCutoff: this._config.filterCutoff,
-      filterResonance: this._config.filterResonance,
-      ampEnvAttack: this._config.ampEnvAttack,
-      ampEnvDecay: this._config.ampEnvDecay,
-      ampEnvSustain: this._config.ampEnvSustain,
-      ampEnvRelease: this._config.ampEnvRelease,
-      volume: this._config.volume,
-      polyphony: this._config.polyphony,
-      pitchEnvAmount: this._config.pitchEnvAmount,
-      pitchEnvAttack: this._config.pitchEnvAttack,
-      lfoRate: this._config.lfoRate,
-      lfoDepth: this._config.lfoDepth,
-      lfoTarget: this._config.lfoTarget,
-      fmModRatio: this._config.fmModRatio,
-      fmModLevel: this._config.fmModLevel,
-      fmCarRatio: this._config.fmCarRatio,
-      pluckDamping: this._config.pluckDamping,
-    });
+  private _applyConfig() {
+    const c = this._config;
+    this._synth.set_oscillator_type(OSC_KIND[c.oscillatorType]);
+    this._synth.set_oscillator_detune(c.oscillatorDetune);
+    this._synth.set_filter_cutoff(c.filterCutoff);
+    this._synth.set_filter_resonance(c.filterResonance);
+    this._synth.set_amp_env(
+      c.ampEnvAttack,
+      c.ampEnvDecay,
+      c.ampEnvSustain,
+      c.ampEnvRelease,
+    );
+    this._synth.set_volume(c.volume);
+    this._synth.set_pitch_env(c.pitchEnvAmount, c.pitchEnvAttack);
+    this._synth.set_lfo(c.lfoRate, c.lfoDepth, LFO_TARGET[c.lfoTarget]);
+    this._synth.set_fm(c.fmModRatio, c.fmModLevel, c.fmCarRatio);
+    this._synth.set_pluck_damping(c.pluckDamping);
   }
 }

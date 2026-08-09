@@ -2,6 +2,9 @@ import type { Sampler as DspSampler } from "kaeldaw-dsp";
 
 type DspModule = {
   Sampler: typeof DspSampler;
+  dsp_alloc: (capacity: number) => number;
+  dsp_free: (ptr: number, capacity: number) => void;
+  dsp_memory: () => WebAssembly.Memory;
 };
 
 let _dsp: DspModule | null = null;
@@ -26,7 +29,13 @@ export class Sampler {
 
   setSample(data: Float32Array, sampleRate: number, rootNote = 60): void {
     this._rootNote = rootNote;
-    this._sampler.set_sample(data, sampleRate, rootNote);
+    const mod = dsp();
+    const bytes = data.byteLength;
+    const ptr = mod.dsp_alloc(bytes);
+    const memory = mod.dsp_memory();
+    new Float32Array(memory.buffer, ptr, data.length).set(data);
+    this._sampler.set_sample_ptr(ptr, data.length, sampleRate, rootNote);
+    mod.dsp_free(ptr, bytes);
   }
 
   get rootNote(): number {
