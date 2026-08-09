@@ -68,8 +68,6 @@ export const useUndoStore = create<UndoStore>((set) => ({
 
   executeAction: (context, getSnapshot) => {
     const snap = getSnapshot() as UndoSnapshot;
-    if (context === "timeline") console.log("executeAction timeline - clips guardados:", snap?.clips?.length, "items");
-    if (context === "pianoRoll") console.log("executeAction pianoRoll - notes guardadas:", snap?.notes?.length, "items");
     history[context].push(snap);
     if (history[context].length > MAX_HISTORY) history[context].shift();
     redoStack[context] = [];
@@ -78,16 +76,9 @@ export const useUndoStore = create<UndoStore>((set) => ({
 
   undo: (context, getCurrentState) => {
     const stack = history[context];
-    if (stack.length === 0) { console.log(`undo ${context}: sin historial`); return null; }
+    if (stack.length === 0) return null;
     const snapshot = stack.pop() as UndoSnapshot;
     const current = getCurrentState() as UndoSnapshot;
-    if (context === "timeline") {
-      console.log("undo timeline - snapshot clips:", snapshot?.clips?.length, "items");
-      console.log("undo timeline - current clips:", current?.clips?.length, "items");
-    }
-    if (context === "pianoRoll") {
-      console.log("undo pianoRoll - snapshot notes:", snapshot?.notes?.length, "- current notes:", current?.notes?.length);
-    }
     redoStack[context].push(current);
     updateFlags(set);
     return snapshot;
@@ -95,11 +86,9 @@ export const useUndoStore = create<UndoStore>((set) => ({
 
   redo: (context, getCurrentState) => {
     const stack = redoStack[context];
-    if (stack.length === 0) { console.log(`redo ${context}: sin historial`); return null; }
+    if (stack.length === 0) return null;
     const snapshot = stack.pop() as UndoSnapshot;
     const current = getCurrentState() as UndoSnapshot;
-    if (context === "timeline") console.log("redo timeline - restoring clips:", snapshot?.clips?.length, "items");
-    if (context === "pianoRoll") console.log("redo pianoRoll - restoring notes:", snapshot?.notes?.length, "items");
     history[context].push(current);
     updateFlags(set);
     return snapshot;

@@ -49,22 +49,3 @@ export function processWasmReverb(handle: number, input: number): number {
 export function freeWasmReverb(handle: number): void {
   wasm?.reverb_free(handle);
 }
-
-export function createWasmLadder(sampleRate: number): number {
-  if (!wasm) throw new Error("WASM not initialized");
-  return wasm.ladder_init(sampleRate);
-}
-
-export function setWasmLadder(_handle: number, cutoff: number, resonance: number): number {
-  if (!wasm) return 0;
-  return wasm.ladder_set(cutoff, resonance);
-}
-
-export function processWasmLadder(handle: number, input: number): number {
-  if (!wasm) return input;
-  return wasm.ladder_process(handle, input);
-}
-
-export function freeWasmLadder(handle: number): void {
-  wasm?.ladder_free(handle);
-}

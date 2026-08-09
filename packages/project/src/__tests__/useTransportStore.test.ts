@@ -13,22 +13,6 @@ vi.mock("@kaeldaw/audio-engine/AudioContextManager", () => ({
   },
 }));
 
-vi.mock("@kaeldaw/audio-engine/AudioScheduler", () => ({
-  AudioScheduler: {
-    onPosition: null as ((tick: number) => void) | null,
-    noteOn: null,
-    noteOff: null,
-    running: false,
-    setEvents: vi.fn(),
-    start: vi.fn(),
-    stop: vi.fn(),
-    processBlock: vi.fn(),
-    dispatchForSample: vi.fn(),
-    clearPending: vi.fn(),
-    _reset: vi.fn(),
-  },
-}));
-
 vi.mock("@kaeldaw/audio-engine/Transport", () => ({
   Transport: {
     get state() { return mockState.state; },

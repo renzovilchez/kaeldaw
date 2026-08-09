@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import { Transport } from "@kaeldaw/audio-engine/Transport";
 import { Clock } from "@kaeldaw/audio-engine/Clock";
-import { AudioScheduler } from "@kaeldaw/audio-engine/AudioScheduler";
 import { AudioContextManager } from "@kaeldaw/audio-engine/AudioContextManager";
 
 export interface TransportStore {
@@ -23,10 +22,6 @@ Clock.onPosition = (tick) => {
   useTransportStore.setState({ position: tick });
 };
 
-AudioScheduler.onPosition = (tick) => {
-  useTransportStore.setState({ position: tick });
-};
-
 export const useTransportStore = create<TransportStore>((set) => ({
   state: Transport.state,
   bpm: Transport.bpm,
@@ -42,13 +37,11 @@ export const useTransportStore = create<TransportStore>((set) => ({
     set({ state: Transport.state, position: Transport.position });
   },
   pause: () => {
-    AudioScheduler.stop();
     Clock.stop();
     Transport.pause();
     set({ state: Transport.state, position: Transport.position });
   },
   stop: () => {
-    AudioScheduler.stop();
     Clock.stop();
     Transport.stop();
     set({ state: Transport.state, position: Transport.position });
