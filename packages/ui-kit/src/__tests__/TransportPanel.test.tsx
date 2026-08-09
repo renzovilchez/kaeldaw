@@ -83,14 +83,14 @@ describe("TransportPanel", () => {
     expect(display).not.toBeNull();
   });
 
-  it("click en play llama a Transport.play()", () => {
+  it("click en play llama a Transport.play()", async () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     root = render(container);
     const playBtn = container.querySelector<HTMLButtonElement>(
       '[data-testid="play-btn"]',
     )!;
-    act(() => { playBtn.click(); });
+    await act(async () => { playBtn.click(); });
     expect(Transport.play).toHaveBeenCalledOnce();
   });
 

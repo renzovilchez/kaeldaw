@@ -17,7 +17,7 @@ function createPianoRoll(): PianoRoll {
   return el;
 }
 
-const GRID_LEFT = 40;
+const GRID_LEFT = 56;
 const HEADER_OFFSET = 24;
 
 describe("PianoRoll", () => {

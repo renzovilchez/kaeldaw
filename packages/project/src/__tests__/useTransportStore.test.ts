@@ -70,8 +70,8 @@ describe("useTransportStore", () => {
     expect(s.timeSignature).toEqual({ beats: 4, beatValue: 4 });
   });
 
-  it("play() cambia state a playing", () => {
-    useTransportStore.getState().play();
+  it("play() cambia state a playing", async () => {
+    await useTransportStore.getState().play();
     expect(useTransportStore.getState().state).toBe("playing");
   });
 
