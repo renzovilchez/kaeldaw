@@ -1,73 +1,163 @@
 import { describe, it, expect, vi } from "vitest";
 
-const mockDsp = {
-  AdsrEnvelope: class {
-    level = 1;
-    state = 0;
-    time = 0;
-    _r = 0.3;
-    note_on() { this.state = 3; this.level = 1; this.time = 0; }
-    note_off() { if (this.state !== 0) { this.state = 4; this.time = 0; } }
-    process(dt: number) {
-      if (this.state === 4) {
-        this.time += dt;
-        if (this.time >= this._r) { this.state = 0; this.level = 0; }
-        else { this.level = 1 - this.time / this._r; }
-      }
-      return this.level;
-    }
-    is_finished() { return this.state === 0; }
-    free() {}
-  },
-  Oscillator: class {
-    _ph = 0; _modPh = 0; _sr = 48000; _kind = 1; _noise = 0; _ks: Float32Array | null = null; _ksi = 0;
-    constructor(kind: number, sr: number, seed: number) {
-      this._kind = kind; this._sr = sr; this._noise = seed || 0x9e3779b9;
-    }
-    process(f: number, mr = 1, ml = 0, cr = 1, pd = 0.5) {
-      if (f <= 0) return 0;
-      const inc = f / this._sr;
-      switch (this._kind) {
-        case 0: { const o = Math.sin(2 * Math.PI * this._ph); this._ph = (this._ph + inc) % 1; return o; }
-        case 1: { const o = 2 * (this._ph % 1) - 1; this._ph = (this._ph + inc) % 1; return o; }
-        case 2: { const o = this._ph % 1 < 0.5 ? 1 : -1; this._ph = (this._ph + inc) % 1; return o; }
-        case 3: { const o = 2 * Math.abs(2 * (this._ph % 1) - 1) - 1; this._ph = (this._ph + inc) % 1; return o; }
-        case 4: {
-          let x = this._noise; x ^= x << 13; x ^= x >>> 17; x ^= x << 5; this._noise = x >>> 0;
-          return (x / 0xffffffff) * 2 - 1;
-        }
-        case 5: {
-          const modI = (f * mr) / this._sr;
-          this._modPh = (this._modPh + modI) % 1;
-          const mod = Math.sin(2 * Math.PI * this._modPh) * ml * f * mr;
-          this._ph = (this._ph + (f * cr + mod) / this._sr) % 1;
-          return Math.sin(2 * Math.PI * this._ph);
-        }
-        default: {
-          if (!this._ks) {
-            const len = Math.max(2, Math.round(this._sr / f));
-            this._ks = new Float32Array(len);
-            for (let i = 0; i < len; i++) {
-              let x = this._noise; x ^= x << 13; x ^= x >>> 17; x ^= x << 5; this._noise = x >>> 0;
-              this._ks[i] = (x / 0xffffffff) * 2 - 1;
-            }
-            this._ksi = 0;
-          }
-          const idx = this._ksi; const cur = this._ks[idx]; const nxt = this._ks[(idx + 1) % this._ks.length];
-          this._ks[idx] = (cur + pd * (nxt - cur)) * 0.996; this._ksi = (idx + 1) % this._ks.length;
-          return cur;
-        }
-      }
-    }
-    reset() { this._ph = 0; this._modPh = 0; this._ks = null; this._noise = this._noise || 0x9e3779b9; }
-    get_phase() { return this._ph % 1.0; }
-    free() {}
-  },
-  biquad_init: () => 0,
-  biquad_set: () => {},
-  biquad_process: (_h: number, i: number) => i,
-  biquad_free: () => {},
+type MockVoice = {
+  on: boolean;
+  note: number;
+  vel: number;
+  ph: number;
+  age: number;
+  env: number;
+  envState: number;
+  envT: number;
+  envRl: number;
 };
+
+class MockPolySynth {
+  _sr: number;
+  _voices: MockVoice[] = [];
+  _age = 0;
+  _cfg: Record<string, unknown>;
+  constructor(sr: number, configJson: string) {
+    this._sr = sr;
+    this._cfg = Object.assign(
+      {
+        oscillatorType: 1,
+        filterCutoff: 8000,
+        filterResonance: 0.1,
+        ampEnvAttack: 0.01,
+        ampEnvDecay: 0.1,
+        ampEnvSustain: 0.7,
+        ampEnvRelease: 0.3,
+        volume: 0.5,
+        polyphony: 8,
+        pitchEnvAmount: 0,
+        pitchEnvAttack: 0,
+        lfoRate: 0,
+        lfoDepth: 0,
+        lfoTarget: "none",
+        fmModRatio: 1,
+        fmModLevel: 0,
+        fmCarRatio: 1,
+        pluckDamping: 0.5,
+      },
+      JSON.parse(configJson || "{}"),
+    );
+    const n = Math.max(1, (this._cfg.polyphony as number) | 0);
+    for (let i = 0; i < n; i++) {
+      this._voices.push({ on: false, note: 0, vel: 0, ph: 0, age: 0, env: 0, envState: 0, envT: 0, envRl: 0 });
+    }
+  }
+  set_config(json: string) {
+    Object.assign(this._cfg, JSON.parse(json || "{}"));
+  }
+  get_config() {
+    return JSON.stringify(this._cfg);
+  }
+  _alloc(): MockVoice {
+    const free = this._voices.find((v) => !v.on);
+    if (free) return free;
+    return this._voices.reduce((a, b) => (b.age < a.age ? b : a));
+  }
+  note_on(note: number, velocity: number) {
+    const v = this._alloc();
+    v.on = true;
+    v.note = Math.max(0, Math.min(127, Math.round(note)));
+    v.vel = Math.max(0, Math.min(127, velocity)) / 127;
+    v.ph = 0;
+    v.age = ++this._age;
+    v.env = 0;
+    v.envState = 1;
+    v.envT = 0;
+  }
+  note_off(note: number) {
+    const n = Math.round(note);
+    for (const v of this._voices) {
+      if (v.on && v.note === n && v.envState !== 4) {
+        v.envState = 4;
+        v.envT = 0;
+        v.envRl = v.env;
+      }
+    }
+  }
+  all_notes_off() {
+    for (const v of this._voices) {
+      if (v.on) {
+        v.envState = 4;
+        v.envT = 0;
+        v.envRl = v.env;
+      }
+    }
+  }
+  active_voices() {
+    return this._voices.filter((v) => v.on).length;
+  }
+  is_active() {
+    return this._voices.some((v) => v.on && v.envState !== 0);
+  }
+  process_sample() {
+    const dt = 1 / this._sr;
+    let sum = 0;
+    for (const v of this._voices) {
+      if (!v.on) continue;
+      const attack = this._cfg.ampEnvAttack as number;
+      const decay = this._cfg.ampEnvDecay as number;
+      const sustain = this._cfg.ampEnvSustain as number;
+      const release = this._cfg.ampEnvRelease as number;
+      switch (v.envState) {
+        case 1:
+          v.envT += dt;
+          if (v.envT >= attack) { v.env = 1; v.envState = 2; }
+          else v.env = v.envT / attack;
+          break;
+        case 2:
+          v.envT += dt;
+          if (v.envT >= decay) { v.env = sustain; v.envState = 3; }
+          else v.env = 1 - (v.envT / decay) * (1 - sustain);
+          break;
+        case 3:
+          v.env = sustain;
+          break;
+        case 4:
+          v.envT += dt;
+          if (v.envT >= release) { v.env = 0; v.on = false; v.envState = 0; }
+          else v.env = v.envRl * (1 - v.envT / release);
+          break;
+      }
+      const freq = 440 * Math.pow(2, (v.note - 69) / 12);
+      const inc = freq / this._sr;
+      let raw: number;
+      switch (this._cfg.oscillatorType as number) {
+        case 0:
+          raw = Math.sin(2 * Math.PI * v.ph);
+          v.ph = (v.ph + inc) % 1;
+          break;
+        case 2:
+          raw = v.ph < 0.5 ? 1 : -1;
+          v.ph = (v.ph + inc) % 1;
+          break;
+        default:
+          raw = 2 * (v.ph % 1) - 1;
+          v.ph = (v.ph + inc) % 1;
+      }
+      sum += raw * v.env * v.vel * (this._cfg.volume as number);
+    }
+    return Math.max(-1, Math.min(1, sum));
+  }
+  process_block(n: number) {
+    const buf = new Float32Array(n * 2);
+    for (let i = 0; i < n; i++) {
+      const s = this.process_sample();
+      buf[i * 2] = s;
+      buf[i * 2 + 1] = s;
+    }
+    return buf;
+  }
+  free() {
+    this._voices = [];
+  }
+}
+
+const mockDsp = { PolySynth: MockPolySynth };
 
 vi.mock("kaeldaw-dsp", () => mockDsp);
 

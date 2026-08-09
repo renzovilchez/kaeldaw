@@ -4,8 +4,10 @@ mod delay;
 mod ladder;
 mod osc;
 mod reverb;
+mod synth;
 pub use adsr::AdsrEnvelope;
 pub use osc::{BandlimitedSaw, BandlimitedSquare, Oscillator};
+pub use synth::PolySynth;
 
 use wasm_bindgen::prelude::*;
 
