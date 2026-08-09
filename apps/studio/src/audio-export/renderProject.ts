@@ -1,16 +1,12 @@
 import { encodeWav, type ExportResult } from "@kaeldaw/project/wav-export";
-import { useClipsStore } from "@kaeldaw/project/useClipsStore";
-import {
-  useMixerStore,
-  type MixerChannel,
-} from "@kaeldaw/project/useMixerStore";
-import { useTracksStore } from "@kaeldaw/project/useTracksStore";
+import type { CoreMixerChannel } from "@kaeldaw/project/core";
 import { Transport } from "@kaeldaw/audio-engine/Transport";
 import {
   initWasmEffects,
   getDspModule,
 } from "@kaeldaw/audio-engine/WasmEffects";
 import { buildMidiEvents, type MidiEvent } from "../shared/buildMidiEvents";
+import { project } from "../stores/useCoreStore";
 
 export type ExportProgress = { percent: number; stage: string };
 
@@ -40,15 +36,15 @@ export async function renderProject(
 
   onProgress?.({ percent: 2, stage: "Reading project..." });
 
-  const clips = useClipsStore.getState().clips;
-  const channels = useMixerStore.getState().channels;
-  const buses = useMixerStore.getState().buses;
-  const masterVolume = useMixerStore.getState().masterVolume;
+  const clips = project.state.clips;
+  const channels = project.state.mixer.channels;
+  const buses = project.state.mixer.buses;
+  const masterVolume = project.state.mixer.masterVolume;
   const bpm = Transport.bpm;
   const sr = sampleRate;
   const ppqn = Transport.ppqn;
 
-  const channelMap = new Map<string, MixerChannel>();
+  const channelMap = new Map<string, CoreMixerChannel>();
   for (const ch of channels) {
     channelMap.set(ch.id, ch);
   }
@@ -135,9 +131,7 @@ export async function renderProject(
 
   for (const [trackId, evs] of trackEvents) {
     const ch = channelMap.get(trackId)!;
-    const trackData = useTracksStore
-      .getState()
-      .tracks.find((t) => t.id === trackId);
+    const trackData = project.state.tracks.find((t) => t.id === trackId);
     const isSampler = trackData?.presetEngine === "sampler";
     if (isSampler) {
       const { SampleCache } = await import("@kaeldaw/instruments/SampleCache");
@@ -148,7 +142,7 @@ export async function renderProject(
         if (data) {
           const meta = SampleCache.getMeta(sid);
           const rootNote =
-            (ch as MixerChannel & { rootNote?: number }).rootNote ?? 60;
+            (ch as CoreMixerChannel & { rootNote?: number }).rootNote ?? 60;
           sampler.setSample(data, meta?.sampleRate ?? sr, rootNote);
         }
       }

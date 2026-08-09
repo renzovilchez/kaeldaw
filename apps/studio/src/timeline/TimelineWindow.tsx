@@ -6,15 +6,14 @@ import {
   memo,
   type MutableRefObject,
 } from "react";
-import { useTracksStore } from "@kaeldaw/project/useTracksStore";
 import { useTransportStore } from "@kaeldaw/project/useTransportStore";
-import { useClipsStore } from "@kaeldaw/project/useClipsStore";
 import type { MidiNoteData } from "@kaeldaw/project/useClipsStore";
 import { useMidiStore } from "@kaeldaw/project/useMidiStore";
 import { useUndoStore, type UndoContext } from "@kaeldaw/project/useUndoStore";
 import { useWindowManager } from "../shared/components/useWindowManager";
 import { PPQN_TO_VISUAL } from "../shared/constants";
 import { createUndoRedo } from "../shared/hooks/useRegisterUndoRedo";
+import { useCore, project } from "../stores/useCoreStore";
 
 interface TimelineClipData {
   id: number;
@@ -53,14 +52,9 @@ export const TimelineWindow = memo(function TimelineWindow({
   undoRefs: MutableRefObject<Record<UndoContext, (() => void) | null>>;
   redoRefs: MutableRefObject<Record<UndoContext, (() => void) | null>>;
 }) {
-  const tracks = useTracksStore((s) => s.tracks);
+  const tracks = useCore((s) => s.tracks);
   const position = useTransportStore((s) => s.position);
-  const clips = useClipsStore((s) => s.clips);
-  const addClip = useClipsStore((s) => s.addClip);
-  const moveClip = useClipsStore((s) => s.moveClip);
-  const resizeClip = useClipsStore((s) => s.resizeClip);
-  const trimClip = useClipsStore((s) => s.trimClip);
-  const removeClip = useClipsStore((s) => s.removeClip);
+  const clips = useCore((s) => s.clips);
   const { open } = useWindowManager();
   const elRef = useRef<TimelineWC>(null);
 
@@ -81,7 +75,6 @@ export const TimelineWindow = memo(function TimelineWindow({
     el.playheadTick = position * PPQN_TO_VISUAL;
   }, [position]);
 
-  const version = useClipsStore((s) => s.version);
   useEffect(() => {
     const wc = elRef.current;
     if (!wc) return;
@@ -102,25 +95,16 @@ export const TimelineWindow = memo(function TimelineWindow({
       if (clip.id > maxId) maxId = clip.id;
     }
     wc._nextClipId = maxId + 1;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [version]);
+  }, [clips]);
 
   const handlersRef = useRef({
-    addClip,
-    moveClip,
-    resizeClip,
-    trimClip,
-    removeClip,
+    addClip: (clip: Parameters<typeof project.addClip>[0], id?: number) =>
+      project.addClip(clip, id),
+    moveClip: project.moveClip,
+    resizeClip: project.resizeClip,
+    trimClip: project.trimClip,
+    removeClip: project.removeClip,
   });
-  useEffect(() => {
-    handlersRef.current = {
-      addClip,
-      moveClip,
-      resizeClip,
-      trimClip,
-      removeClip,
-    };
-  }, [addClip, moveClip, resizeClip, trimClip, removeClip]);
 
   useEffect(() => {
     const undoStore = undoRefs.current;
@@ -129,26 +113,12 @@ export const TimelineWindow = memo(function TimelineWindow({
     const { undo, redo } = createUndoRedo(
       "timeline",
       () => ({
-        clips: elRef.current?.getClips() ?? [],
-        nextId: elRef.current?._nextClipId ?? 0,
+        clips: project.state.clips.map((c) => ({
+          ...c,
+          notes: c.notes.map((n) => ({ ...n })),
+        })),
       }),
-      (snap) => {
-        const wc = elRef.current;
-        if (!wc) return;
-        wc.clearClips();
-        for (const clip of snap.clips)
-          wc.addClip(
-            clip.trackIndex,
-            clip.startTick,
-            clip.durationTicks,
-            clip.color,
-            clip.name,
-            undefined,
-            clip.notes,
-            clip.startOffset,
-          );
-        wc._nextClipId = snap.nextId;
-      },
+      (snap) => project.apply({ clips: snap.clips }),
     );
     undoStore.timeline = undo;
     redoStore.timeline = redo;
@@ -167,7 +137,7 @@ export const TimelineWindow = memo(function TimelineWindow({
       useMidiStore.getState().clear();
       return;
     }
-    const clip = useClipsStore.getState().clips.find((c) => c.id === clipId);
+    const clip = project.state.clips.find((c) => c.id === clipId);
     if (clip) {
       useMidiStore.getState().loadForClip(clipId, clip.notes);
     }
@@ -190,8 +160,10 @@ export const TimelineWindow = memo(function TimelineWindow({
       const trackId = trackIdAt(d.trackIndex);
       if (!trackId) return;
       useUndoStore.getState().executeAction("timeline", () => ({
-        clips: wc.getClips(),
-        nextId: wc._nextClipId,
+        clips: project.state.clips.map((c) => ({
+          ...c,
+          notes: c.notes.map((n) => ({ ...n })),
+        })),
       }));
       const wcId = wc.addClip(
         d.trackIndex,
@@ -218,9 +190,13 @@ export const TimelineWindow = memo(function TimelineWindow({
       );
     };
 
-    const onBeforeClipAction = (e: Event) => {
-      const d = (e as CustomEvent).detail;
-      useUndoStore.getState().executeAction("timeline", () => d);
+    const onBeforeClipAction = () => {
+      useUndoStore.getState().executeAction("timeline", () => ({
+        clips: project.state.clips.map((c) => ({
+          ...c,
+          notes: c.notes.map((n) => ({ ...n })),
+        })),
+      }));
     };
 
     const onClipMove = (e: Event) => {

@@ -37,6 +37,10 @@ export class Project {
     return this._store.subscribe(listener);
   }
 
+  apply(patch: Partial<CoreState>): void {
+    this._store.apply(patch);
+  }
+
   // --- Project meta ---
 
   get name(): string {
@@ -251,6 +255,10 @@ export class Project {
 
   setBusVolume(id: string, volume: number): void {
     this._store.dispatch("setBusVolume", (s) => C.setBusVolume(s, id, volume));
+  }
+
+  setBusMute(id: string, mute: boolean): void {
+    this._store.dispatch("setBusMute", (s) => C.setBusMute(s, id, mute));
   }
 
   setMasterVolume(volume: number): void {

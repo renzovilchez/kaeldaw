@@ -40,6 +40,7 @@ export interface MixerStore {
   buses: MixerBus[];
   masterVolume: number;
   masterMeterLevel: number;
+  meterLevels: Record<string, number>;
   addChannel: (name?: string, id?: string) => void;
   removeChannel: (id: string) => void;
   setVolume: (id: string, volume: number) => void;
@@ -89,6 +90,7 @@ export const useMixerStore = create<MixerStore>((set) => ({
   buses: buildDefaultBuses(),
   masterVolume: 1,
   masterMeterLevel: 0,
+  meterLevels: {},
   addChannel: (name?: string, id?: string) => {
     chCounter++;
     const ch: MixerChannel = {
@@ -139,6 +141,7 @@ export const useMixerStore = create<MixerStore>((set) => ({
   },
   setMeterLevel: (id, level) => {
     set((s) => ({
+      meterLevels: { ...s.meterLevels, [id]: level },
       channels: s.channels.map((c) => (c.id === id ? { ...c, meterLevel: level } : c)),
     }));
   },

@@ -1,10 +1,10 @@
-import { useTracksStore } from "@kaeldaw/project/useTracksStore";
 import { useUndoStore } from "@kaeldaw/project/useUndoStore";
+import { project } from "../stores/useCoreStore";
 
 export function tracksExec(action: () => void) {
-  const state = useTracksStore.getState();
+  const tracks = project.state.tracks;
   useUndoStore.getState().executeAction("tracks", () => ({
-    tracks: state.tracks.map((t) => ({ id: t.id, name: t.name })),
+    tracks: tracks.map((t) => ({ id: t.id, name: t.name, color: t.color })),
   }));
   action();
 }

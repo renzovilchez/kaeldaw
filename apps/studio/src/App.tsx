@@ -1,10 +1,9 @@
 import { useRef, useEffect, useMemo, useCallback } from "react";
-import { useTracksStore } from "@kaeldaw/project/useTracksStore";
 import { useMixerStore } from "@kaeldaw/project/useMixerStore";
-import { useProjectStore } from "@kaeldaw/project/useProjectStore";
 import { useTransportStore } from "@kaeldaw/project/useTransportStore";
 import { useUndoStore } from "@kaeldaw/project/useUndoStore";
-import { saveProjectFile, loadProjectFile } from "@kaeldaw/project/save-load";
+import { useCore, project } from "./stores/useCoreStore";
+import { saveProjectFile, loadProjectFile } from "./stores/projectFiles";
 import { TopBar } from "./app/components/TopBar";
 import { TrackList } from "./tracks/TrackList";
 import { MixerPanel } from "./mixer/MixerPanel";
@@ -42,16 +41,16 @@ import {
 } from "./tracks/handlers";
 
 export default function App() {
-  const tracks = useTracksStore((s) => s.tracks);
-  const selectedId = useTracksStore((s) => s.selectedId);
-  const channels = useMixerStore((s) => s.channels);
-  const buses = useMixerStore((s) => s.buses);
-  const masterVolume = useMixerStore((s) => s.masterVolume);
+  const tracks = useCore((s) => s.tracks);
+  const selectedId = useCore((s) => s.meta.selectedTrackId);
+  const channels = useCore((s) => s.mixer.channels);
+  const buses = useCore((s) => s.mixer.buses);
+  const masterVolume = useCore((s) => s.mixer.masterVolume);
   const masterMeterLevel = useMixerStore((s) => s.masterMeterLevel);
+  const meterLevels = useMixerStore((s) => s.meterLevels);
   const setMeterLevel = useMixerStore((s) => s.setMeterLevel);
   const setMasterMeterLevel = useMixerStore((s) => s.setMasterMeterLevel);
-  const projectName = useProjectStore((s) => s.name);
-  const setName = useProjectStore((s) => s.setName);
+  const projectName = useCore((s) => s.name);
   const transportState = useTransportStore((s) => s.state);
   const metronomeEnabled = useTransportStore((s) => s.metronomeEnabled);
   const setFocusedContext = useUndoStore((s) => s.setFocusedContext);
@@ -76,41 +75,38 @@ export default function App() {
     const mixer = createUndoRedo(
       "mixer",
       () => {
-        const s = useMixerStore.getState();
+        const m = project.state.mixer;
         return {
-          channels: s.channels.map((ch) => ({ ...ch })),
-          masterVolume: s.masterVolume,
+          channels: m.channels.map((ch) => ({ ...ch })),
+          masterVolume: m.masterVolume,
         };
       },
       (snap) =>
-        useMixerStore.setState({
-          channels: snap.channels,
-          masterVolume: snap.masterVolume ?? 1,
+        project.apply({
+          mixer: {
+            ...project.state.mixer,
+            channels: snap.channels,
+            masterVolume: snap.masterVolume ?? 1,
+          },
         }),
     );
-    const tracks = createUndoRedo(
+    const tracksUndo = createUndoRedo(
       "tracks",
       () =>
-        useTracksStore
-          .getState()
-          .tracks.map((t) => ({
-            id: t.id,
-            name: t.name,
-            color: t.color,
-            presetId: t.presetId,
-            presetEngine: t.presetEngine,
-            sampleId: t.sampleId,
-          })),
-      (tracks) =>
-        useTracksStore.setState({
-          tracks,
-          selectedId: useTracksStore.getState().selectedId,
-        }),
+        project.state.tracks.map((t) => ({
+          id: t.id,
+          name: t.name,
+          color: t.color,
+          presetId: t.presetId,
+          presetEngine: t.presetEngine,
+          sampleId: t.sampleId,
+        })),
+      (tracksSnap) => project.apply({ tracks: tracksSnap }),
     );
     undo.mixer = mixer.undo;
     redo.mixer = mixer.redo;
-    undo.tracks = tracks.undo;
-    redo.tracks = tracks.redo;
+    undo.tracks = tracksUndo.undo;
+    redo.tracks = tracksUndo.redo;
     return () => {
       undo.mixer = null;
       redo.mixer = null;
@@ -172,7 +168,7 @@ export default function App() {
       <div className="h-screen bg-[#2a2a2a] text-[#ccc] text-sm select-none flex flex-col overflow-hidden">
         <TopBar
           projectName={projectName}
-          onSetName={setName}
+          onSetName={(name) => project.setName(name)}
           onSave={saveProjectFile}
           onLoad={loadProjectFile}
           onExport={handleExport}
@@ -211,12 +207,13 @@ export default function App() {
               <MixerPanel
                 channels={channels.map((ch) => ({
                   ...ch,
+                  meterLevel: meterLevels[ch.id] ?? 0,
                   insertDelay: ch.insertFx?.[0]?.enabled ?? false,
                   insertReverb: ch.insertFx?.[1]?.enabled ?? false,
                   sendLevel:
                     ch.sends?.find((s) => s.busId === "reverb-bus")?.level ?? 0,
                 }))}
-                buses={buses.map((b) => ({ ...b }))}
+                buses={buses.map((b) => ({ ...b, meterLevel: 0 }))}
                 masterVolume={masterVolume}
                 masterMeterLevel={masterMeterLevel}
                 onVolumeChange={handleVolumeChange}

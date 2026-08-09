@@ -1,11 +1,11 @@
-import { useMixerStore } from "@kaeldaw/project/useMixerStore";
 import { useUndoStore } from "@kaeldaw/project/useUndoStore";
+import { project } from "../stores/useCoreStore";
 
 export function mixerExec(action: () => void) {
-  const state = useMixerStore.getState();
+  const mixer = project.state.mixer;
   useUndoStore.getState().executeAction("mixer", () => ({
-    channels: state.channels.map((ch) => ({ ...ch })),
-    masterVolume: state.masterVolume,
+    channels: mixer.channels.map((ch) => ({ ...ch })),
+    masterVolume: mixer.masterVolume,
   }));
   action();
 }

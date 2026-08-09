@@ -1,23 +1,20 @@
-import { useTracksStore } from "@kaeldaw/project/useTracksStore";
-import { useMixerStore } from "@kaeldaw/project/useMixerStore";
 import { PolySynthOutput } from "@kaeldaw/instruments/PolySynthOutput";
 import { instrumentManager } from "../shared/instrumentManager";
 import { tracksExec } from "./execWithUndo";
+import { project } from "../stores/useCoreStore";
 
 export function handleAddTrack() {
   tracksExec(() => {
-    const tracks = useTracksStore.getState().tracks;
-    const name = `Track ${tracks.length + 1}`;
-    useTracksStore.getState().addTrack(name);
-    const newTrack = useTracksStore.getState().tracks.at(-1);
-    if (newTrack)
-      useMixerStore.getState().addChannel(newTrack.name, newTrack.id);
+    const name = `Track ${project.state.tracks.length + 1}`;
+    const id = project.addTrack(name);
+    const track = project.state.tracks.find((t) => t.id === id);
+    if (track) project.addChannel({ id: track.id, name: track.name });
   });
 }
 
 export function handleSelectTrack(id: string) {
-  useTracksStore.getState().selectTrack(id);
-  const track = useTracksStore.getState().tracks.find((t) => t.id === id);
+  project.selectTrack(id);
+  const track = project.state.tracks.find((t) => t.id === id);
   if (track) {
     instrumentManager.selectPreset(track.presetId);
     if (track.presetEngine === "sampler" && track.sampleId) {
@@ -37,5 +34,5 @@ export function handleSelectTrack(id: string) {
 }
 
 export function handleColorChange(id: string, color: string) {
-  useTracksStore.getState().setTrackColor(id, color);
+  project.setTrackColor(id, color);
 }

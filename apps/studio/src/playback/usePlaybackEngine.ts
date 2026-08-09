@@ -1,10 +1,9 @@
 import { useEffect } from "react";
 import { PolySynthOutput } from "@kaeldaw/instruments/PolySynthOutput";
 import { Transport } from "@kaeldaw/audio-engine/Transport";
-import { useClipsStore } from "@kaeldaw/project/useClipsStore";
-import { useMixerStore } from "@kaeldaw/project/useMixerStore";
 import { instrumentManager } from "../shared/instrumentManager";
 import { buildMidiEvents } from "../shared/buildMidiEvents";
+import { project } from "../stores/useCoreStore";
 
 export function usePlaybackEngine(
   transportState: string,
@@ -16,7 +15,7 @@ export function usePlaybackEngine(
 
     if (transportState === "playing") {
       PolySynthOutput.onLevel = (level: number) => {
-        for (const ch of useMixerStore.getState().channels) {
+        for (const ch of project.state.mixer.channels) {
           setMeterLevel(ch.id, level);
         }
         setMasterMeterLevel(level);
@@ -32,7 +31,7 @@ export function usePlaybackEngine(
         }
         if (cancelled) return;
 
-        const clips = useClipsStore.getState().clips;
+        const clips = project.state.clips;
         const events = buildMidiEvents(clips);
 
         PolySynthOutput.startScheduled(
@@ -47,7 +46,7 @@ export function usePlaybackEngine(
         cancelled = true;
         PolySynthOutput.allNotesOff();
         PolySynthOutput.stop();
-        for (const ch of useMixerStore.getState().channels) {
+        for (const ch of project.state.mixer.channels) {
           setMeterLevel(ch.id, 0);
         }
         setMasterMeterLevel(0);
@@ -55,7 +54,7 @@ export function usePlaybackEngine(
     } else {
       PolySynthOutput.allNotesOff();
       PolySynthOutput.stop();
-      for (const ch of useMixerStore.getState().channels) {
+      for (const ch of project.state.mixer.channels) {
         setMeterLevel(ch.id, 0);
       }
       setMasterMeterLevel(0);

@@ -10,6 +10,7 @@ export interface CoreStore {
   subscribe: (listener: CoreListener) => () => void;
   dispatch: (name: string, reducer: CoreReducer) => void;
   run: (name: string, reducer: CoreReducer) => CoreState;
+  apply: (patch: Partial<CoreState>) => void;
   undo: () => boolean;
   redo: () => boolean;
   clearHistory: () => void;
@@ -63,6 +64,13 @@ export function createCoreStore(initialState: CoreState): CoreStore {
       store.setState(after);
       notify(after, before);
       return after;
+    },
+
+    apply: (patch) => {
+      const before = store.getState();
+      const next = { ...before, ...patch };
+      store.setState(next);
+      notify(next, before);
     },
 
     undo: () => {

@@ -46,6 +46,7 @@ export {
   setChannelSend,
   addMixerBus,
   setBusVolume,
+  setBusMute,
   setMasterVolume,
   play,
   pause,

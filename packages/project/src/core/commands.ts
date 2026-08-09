@@ -471,6 +471,16 @@ export function setBusVolume(state: CoreState, id: string, volume: number): Core
   };
 }
 
+export function setBusMute(state: CoreState, id: string, mute: boolean): CoreState {
+  return {
+    ...state,
+    mixer: {
+      ...state.mixer,
+      buses: state.mixer.buses.map((b) => (b.id === id ? { ...b, mute } : b)),
+    },
+  };
+}
+
 export function setMasterVolume(state: CoreState, volume: number): CoreState {
   return {
     ...state,
