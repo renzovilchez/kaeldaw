@@ -1,9 +1,8 @@
-import type { AdsrEnvelope as AdsrEnvelopeType, BandlimitedSaw as BandlimitedSawType, BandlimitedSquare as BandlimitedSquareType } from "kaeldaw-dsp";
+import type { AdsrEnvelope as AdsrEnvelopeType, Oscillator as DspOscillator } from "kaeldaw-dsp";
 
 type DspModule = {
   AdsrEnvelope: typeof AdsrEnvelopeType;
-  BandlimitedSaw: typeof BandlimitedSawType;
-  BandlimitedSquare: typeof BandlimitedSquareType;
+  Oscillator: typeof DspOscillator;
   biquad_init: (sr: number) => number;
   biquad_set: (sr: number, type: number, cutoff: number, q: number, gain: number) => number;
   biquad_process: (handle: number, input: number) => number;
@@ -76,10 +75,22 @@ function midiToFreq(note: number): number {
   return A4_FREQ * Math.pow(2, (note - A4_MIDI) / NOTES_PER_OCTAVE);
 }
 
+const OSC_KIND: Record<OscillatorType, number> = {
+  sine: 0,
+  saw: 1,
+  square: 2,
+  triangle: 3,
+  noise: 4,
+  fm: 5,
+  pluck: 6,
+};
+
+const SEED_BASE = 0x9e3779b9;
+
 interface Voice {
   note: number;
   velocity: number;
-  oscillator: BandlimitedSawType | BandlimitedSquareType | null;
+  oscillator: DspOscillator | null;
   adsr: AdsrEnvelopeType | null;
   filterHandle: number;
   age: number;
@@ -87,11 +98,6 @@ interface Voice {
   released: boolean;
   elapsed: number;
   lfoPhase: number;
-  fmModPhase: number;
-  fmCarPhase: number;
-  pluckBuf: Float32Array | null;
-  pluckIdx: number;
-  pluckPrev: number;
 }
 
 export class PolySynth {
@@ -121,6 +127,7 @@ export class PolySynth {
   noteOn(note: number, velocity: number) {
     const voice = this._allocateVoice();
     const m = this._dsp;
+    const c = this._config;
     voice.note = Math.max(0, Math.min(127, Math.round(note)));
     voice.velocity = Math.max(0, Math.min(127, velocity)) / 127;
     voice.age = ++this._ageCounter;
@@ -128,44 +135,21 @@ export class PolySynth {
     voice.released = false;
     voice.elapsed = 0;
     voice.lfoPhase = 0;
-    voice.fmModPhase = 0;
-    voice.fmCarPhase = 0;
 
-    const sr = this._sampleRate;
-    const c = this._config;
-    if (c.oscillatorType === "pluck") {
-      voice.oscillator?.free();
-      voice.oscillator = null;
-      const bufLen = Math.max(4, Math.round(sr / midiToFreq(note)));
-      if (!voice.pluckBuf || voice.pluckBuf.length !== bufLen) {
-        voice.pluckBuf = new Float32Array(bufLen);
-      }
-      for (let i = 0; i < bufLen; i++) {
-        voice.pluckBuf[i] = Math.random() * 2 - 1;
-      }
-      voice.pluckIdx = 0;
-      voice.pluckPrev = 0;
-    } else {
-      voice.pluckBuf = null;
-      const useOsc = c.oscillatorType !== "noise" && c.oscillatorType !== "fm";
-      if (useOsc) {
-        const needSquare = c.oscillatorType === "square";
-        const isSquare = voice.oscillator instanceof m.BandlimitedSquare;
-        if (needSquare !== isSquare) {
-          voice.oscillator?.free();
-          voice.oscillator = needSquare ? new m.BandlimitedSquare(sr) : new m.BandlimitedSaw(sr);
-        } else {
-          voice.oscillator?.reset();
-        }
-      }
-    }
+    voice.oscillator?.free();
+    const seed = (voice.age >>> 0) * SEED_BASE + (voice.note as number) * 0x1000003;
+    voice.oscillator = new m.Oscillator(
+      OSC_KIND[c.oscillatorType],
+      this._sampleRate,
+      seed >>> 0,
+    );
 
     voice.adsr?.free();
     voice.adsr = new m.AdsrEnvelope(c.ampEnvAttack, c.ampEnvDecay, c.ampEnvSustain, c.ampEnvRelease);
     voice.adsr.note_on();
 
     m.biquad_free(voice.filterHandle);
-    voice.filterHandle = m.biquad_set(sr, 0, c.filterCutoff, c.filterResonance, 0);
+    voice.filterHandle = m.biquad_set(this._sampleRate, 0, c.filterCutoff, c.filterResonance, 0);
   }
 
   noteOff(note: number) {
@@ -239,34 +223,16 @@ export class PolySynth {
       if (c.lfoTarget === "pitch") freq *= 1 + lfoVal * 0.05;
 
       let raw: number;
-
-      if (c.oscillatorType === "noise") {
-        raw = Math.random() * 2 - 1;
-      } else if (c.oscillatorType === "pluck" && v.pluckBuf) {
-        const bufLen = v.pluckBuf.length;
-        const out = v.pluckBuf[v.pluckIdx];
-        const avg = (out + v.pluckPrev) * 0.5;
-        v.pluckPrev = out;
-        v.pluckBuf[v.pluckIdx] = avg * (1 - c.pluckDamping * 0.5);
-        v.pluckIdx = (v.pluckIdx + 1) % bufLen;
-        raw = out;
-      } else if (c.oscillatorType === "fm") {
-        const modFreq = freq * c.fmModRatio;
-        v.fmModPhase += modFreq * dt * TAU;
-        const mod = Math.sin(v.fmModPhase) * c.fmModLevel * modFreq;
-        v.fmCarPhase += (freq * c.fmCarRatio + mod) * dt * TAU;
-        raw = Math.sin(v.fmCarPhase);
-      } else if (!v.oscillator) {
+      if (!v.oscillator) {
         raw = 0;
-      } else if (c.oscillatorType === "sine") {
-        raw = Math.sin(TAU * v.oscillator.get_phase());
-        v.oscillator.process(freq);
-      } else if (c.oscillatorType === "triangle") {
-        const phase = v.oscillator.get_phase();
-        raw = 1 - 4 * Math.abs(phase - 0.5);
-        v.oscillator.process(freq);
       } else {
-        raw = v.oscillator.process(freq);
+        raw = v.oscillator.process(
+          freq,
+          c.fmModRatio,
+          c.fmModLevel,
+          c.fmCarRatio,
+          c.pluckDamping,
+        );
       }
 
       let filtered = m.biquad_process(v.filterHandle, raw);
@@ -306,7 +272,6 @@ export class PolySynth {
       v.oscillator?.free();
       v.adsr?.free();
       m.biquad_free(v.filterHandle);
-      v.pluckBuf = null;
     }
     this._voices = [];
   }
@@ -316,7 +281,7 @@ export class PolySynth {
     return {
       note: 0,
       velocity: 0,
-      oscillator: new m.BandlimitedSaw(this._sampleRate),
+      oscillator: new m.Oscillator(OSC_KIND.saw, this._sampleRate, 1),
       adsr: new m.AdsrEnvelope(0, 0, 0, 0),
       filterHandle: m.biquad_init(this._sampleRate),
       age: 0,
@@ -324,11 +289,6 @@ export class PolySynth {
       released: false,
       elapsed: 0,
       lfoPhase: 0,
-      fmModPhase: 0,
-      fmCarPhase: 0,
-      pluckBuf: null,
-      pluckIdx: 0,
-      pluckPrev: 0,
     };
   }
 

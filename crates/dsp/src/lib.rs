@@ -5,7 +5,7 @@ mod ladder;
 mod osc;
 mod reverb;
 pub use adsr::AdsrEnvelope;
-pub use osc::{BandlimitedSaw, BandlimitedSquare};
+pub use osc::{BandlimitedSaw, BandlimitedSquare, Oscillator};
 
 use wasm_bindgen::prelude::*;
 

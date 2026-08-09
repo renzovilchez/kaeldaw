@@ -19,27 +19,47 @@ const mockDsp = {
     is_finished() { return this.state === 0; }
     free() {}
   },
-  BandlimitedSaw: class {
-    _ph = 0; _sr = 48000;
-    constructor(sr: number) { this._sr = sr; }
-    process(f: number) {
-      if (f <= 0) return 0;
-      this._ph += f / this._sr;
-      return 2 * (this._ph % 1.0) - 1;
+  Oscillator: class {
+    _ph = 0; _modPh = 0; _sr = 48000; _kind = 1; _noise = 0; _ks: Float32Array | null = null; _ksi = 0;
+    constructor(kind: number, sr: number, seed: number) {
+      this._kind = kind; this._sr = sr; this._noise = seed || 0x9e3779b9;
     }
-    reset() { this._ph = 0; }
-    get_phase() { return this._ph % 1.0; }
-    free() {}
-  },
-  BandlimitedSquare: class {
-    _ph = 0; _sr = 48000;
-    constructor(sr: number) { this._sr = sr; }
-    process(f: number) {
+    process(f: number, mr = 1, ml = 0, cr = 1, pd = 0.5) {
       if (f <= 0) return 0;
-      this._ph += f / this._sr;
-      return this._ph % 1.0 < 0.5 ? 1 : -1;
+      const inc = f / this._sr;
+      switch (this._kind) {
+        case 0: { const o = Math.sin(2 * Math.PI * this._ph); this._ph = (this._ph + inc) % 1; return o; }
+        case 1: { const o = 2 * (this._ph % 1) - 1; this._ph = (this._ph + inc) % 1; return o; }
+        case 2: { const o = this._ph % 1 < 0.5 ? 1 : -1; this._ph = (this._ph + inc) % 1; return o; }
+        case 3: { const o = 2 * Math.abs(2 * (this._ph % 1) - 1) - 1; this._ph = (this._ph + inc) % 1; return o; }
+        case 4: {
+          let x = this._noise; x ^= x << 13; x ^= x >>> 17; x ^= x << 5; this._noise = x >>> 0;
+          return (x / 0xffffffff) * 2 - 1;
+        }
+        case 5: {
+          const modI = (f * mr) / this._sr;
+          this._modPh = (this._modPh + modI) % 1;
+          const mod = Math.sin(2 * Math.PI * this._modPh) * ml * f * mr;
+          this._ph = (this._ph + (f * cr + mod) / this._sr) % 1;
+          return Math.sin(2 * Math.PI * this._ph);
+        }
+        default: {
+          if (!this._ks) {
+            const len = Math.max(2, Math.round(this._sr / f));
+            this._ks = new Float32Array(len);
+            for (let i = 0; i < len; i++) {
+              let x = this._noise; x ^= x << 13; x ^= x >>> 17; x ^= x << 5; this._noise = x >>> 0;
+              this._ks[i] = (x / 0xffffffff) * 2 - 1;
+            }
+            this._ksi = 0;
+          }
+          const idx = this._ksi; const cur = this._ks[idx]; const nxt = this._ks[(idx + 1) % this._ks.length];
+          this._ks[idx] = (cur + pd * (nxt - cur)) * 0.996; this._ksi = (idx + 1) % this._ks.length;
+          return cur;
+        }
+      }
     }
-    reset() { this._ph = 0; }
+    reset() { this._ph = 0; this._modPh = 0; this._ks = null; this._noise = this._noise || 0x9e3779b9; }
     get_phase() { return this._ph % 1.0; }
     free() {}
   },

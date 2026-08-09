@@ -327,6 +327,17 @@ const DEFAULTS = {
 };
 
 let wasmModule = null;
+let wasmOscSeed = 1;
+
+const OSC_KIND = {
+  sine: 0,
+  saw: 1,
+  square: 2,
+  triangle: 3,
+  noise: 4,
+  fm: 5,
+  pluck: 6,
+};
 
 function useWasm() {
   return wasmModule !== null;
@@ -334,21 +345,29 @@ function useWasm() {
 
 class WasmOscillator {
   constructor(type, sampleRate) {
-    this.type = type;
-    this.sampleRate = sampleRate;
-    this.wasmPointer =
-      type === "square"
-        ? wasmModule.bandlimitedsquare_new(sampleRate)
-        : wasmModule.bandlimitedsaw_new(sampleRate);
+    this.pointer = wasmModule.oscillator_new(
+      OSC_KIND[type] ?? 1,
+      sampleRate,
+      wasmOscSeed++ >>> 0,
+    );
   }
 
-  next(frequency, sampleRate) {
-    if (this.type === "sine") {
-      return Math.sin(
-        TAU * wasmModule.bandlimitedsaw_get_phase(this.wasmPointer),
-      );
+  next(frequency, sampleRate, config) {
+    return wasmModule.oscillator_process(
+      this.pointer,
+      frequency,
+      config?.fmModRatio ?? 4.76,
+      config?.fmModLevel ?? 0.8,
+      config?.fmCarRatio ?? 1,
+      config?.pluckDamping ?? 0.5,
+    );
+  }
+
+  free() {
+    if (this.pointer !== 0) {
+      wasmModule.__wbg_oscillator_free(this.pointer, 0);
+      this.pointer = 0;
     }
-    return wasmModule.bandlimitedsaw_process(this.wasmPointer, frequency);
   }
 }
 
@@ -377,6 +396,13 @@ class WasmAdsrEnvelope {
   get done() {
     return wasmModule.adsrenvelope_is_finished(this.wasmPointer) !== 0;
   }
+
+  free() {
+    if (this.wasmPointer !== 0) {
+      wasmModule.__wbg_adsrenvelope_free(this.wasmPointer, 0);
+      this.wasmPointer = 0;
+    }
+  }
 }
 
 class WasmBiquadFilter {
@@ -386,6 +412,49 @@ class WasmBiquadFilter {
 
   run(input) {
     return wasmModule.biquad_process(this.handle, input);
+  }
+
+  free() {
+    if (this.handle !== -1 && this.handle !== undefined) {
+      wasmModule.biquad_free(this.handle);
+      this.handle = -1;
+    }
+  }
+}
+
+class WasmDelay {
+  constructor(sampleRate) {
+    this.handle = wasmModule.delay_init(sampleRate, 2);
+    wasmModule.delay_set(this.handle, 0.4, 0.4, 0.3);
+  }
+
+  run(input) {
+    return wasmModule.delay_process(this.handle, input);
+  }
+
+  free() {
+    if (this.handle !== -1) {
+      wasmModule.delay_free(this.handle);
+      this.handle = -1;
+    }
+  }
+}
+
+class WasmReverb {
+  constructor(sampleRate) {
+    this.handle = wasmModule.reverb_init(sampleRate);
+    wasmModule.reverb_set(this.handle, 0.4, 0.3, 0.5);
+  }
+
+  run(input) {
+    return wasmModule.reverb_process(this.handle, input);
+  }
+
+  free() {
+    if (this.handle !== -1) {
+      wasmModule.reverb_free(this.handle);
+      this.handle = -1;
+    }
   }
 }
 
@@ -407,6 +476,14 @@ function createFilter(sampleRate, cutoff, resonance) {
     : new BiquadFilter(
         ...calculateLowPassCoefficients(sampleRate, cutoff, resonance),
       );
+}
+
+function createDelay(sampleRate) {
+  return useWasm() ? new WasmDelay(sampleRate) : new Delay(sampleRate, 2);
+}
+
+function createReverb(sampleRate) {
+  return useWasm() ? new WasmReverb(sampleRate) : new Reverb(sampleRate);
 }
 
 class Synth {
@@ -456,8 +533,17 @@ class Synth {
     return oldestVoice;
   }
 
+  _freeVoiceResources(voice) {
+    if (voice.oscillator && typeof voice.oscillator.free === "function")
+      voice.oscillator.free();
+    if (voice.adsr && typeof voice.adsr.free === "function") voice.adsr.free();
+    if (voice.filter && typeof voice.filter.free === "function")
+      voice.filter.free();
+  }
+
   noteOn(note, velocity, channelId) {
     const voice = this._allocateVoice();
+    this._freeVoiceResources(voice);
     voice.note = Math.max(0, Math.min(127, Math.round(note) | 0));
     voice.velocity = Math.max(0, Math.min(127, velocity)) / 127;
     voice.age = ++this.ageCounter;
@@ -718,12 +804,6 @@ class KaeldawProcessor extends AudioWorkletProcessor {
     this.tickToSampleRatio = 1;
     this.blockCounter = 0;
     this.metronomeEnabled = false;
-    this.jsDelay = new Delay(sampleRate, 2);
-    this.jsReverb = new Reverb(sampleRate);
-    this.wasmDelayHandle = -1;
-    this.wasmReverbHandle = -1;
-    this.delayEnabled = false;
-    this.reverbEnabled = false;
     this.fadeOutSamples = 0;
     this.fadeOutTotal = 0;
     this.metronomePpqn = 960;
@@ -846,10 +926,7 @@ class KaeldawProcessor extends AudioWorkletProcessor {
             });
             wasmModule = instance.exports;
             wasmModule.__wbindgen_start();
-            this.wasmDelayHandle = wasmModule.delay_init(this.sampleRate, 2);
-            wasmModule.delay_set(this.wasmDelayHandle, 0.4, 0.4, 0.3);
-            this.wasmReverbHandle = wasmModule.reverb_init(this.sampleRate);
-            wasmModule.reverb_set(this.wasmReverbHandle, 0.4, 0.3, 0.5);
+            this.port.postMessage({ type: "wasm_ok" });
           } catch (error) {
             this.port.postMessage({
               type: "err",
@@ -923,13 +1000,13 @@ class KaeldawProcessor extends AudioWorkletProcessor {
 
           if (channelState.insertDelay) {
             if (!this.channelDelay[channelId])
-              this.channelDelay[channelId] = new Delay(this.sampleRate, 2);
+              this.channelDelay[channelId] = createDelay(this.sampleRate);
             processedSample = this.channelDelay[channelId].run(processedSample);
           }
 
           if (channelState.insertReverb) {
             if (!this.channelReverb[channelId])
-              this.channelReverb[channelId] = new Reverb(this.sampleRate);
+              this.channelReverb[channelId] = createReverb(this.sampleRate);
             processedSample =
               this.channelReverb[channelId].run(processedSample);
           }
@@ -955,13 +1032,13 @@ class KaeldawProcessor extends AudioWorkletProcessor {
 
           if (busState.insertDelay) {
             if (!this.busDelay[busId])
-              this.busDelay[busId] = new Delay(this.sampleRate, 2);
+              this.busDelay[busId] = createDelay(this.sampleRate);
             processedSample = this.busDelay[busId].run(processedSample);
           }
 
           if (busState.insertReverb) {
             if (!this.busReverb[busId])
-              this.busReverb[busId] = new Reverb(this.sampleRate);
+              this.busReverb[busId] = createReverb(this.sampleRate);
             processedSample = this.busReverb[busId].run(processedSample);
           }
 
