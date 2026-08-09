@@ -65,6 +65,20 @@ export {
   type CoreStore,
 } from "./store";
 
+export { Project } from "./project";
+
+export {
+  Instrument,
+  SynthInstrument,
+  SamplerInstrument,
+  instrumentFromPreset,
+  type InstrumentEngine,
+  type InstrumentEngineType,
+  type InstrumentParams,
+  type InstrumentPresetData,
+  type EngineFactory,
+} from "./instrument";
+
 export {
   toSchema,
   fromSchema,

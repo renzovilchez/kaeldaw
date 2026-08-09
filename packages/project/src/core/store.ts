@@ -58,9 +58,10 @@ export function createCoreStore(initialState: CoreState): CoreStore {
     run: (name, reducer) => {
       const before = store.getState();
       const after = reducer(before);
-      if (after !== before) {
-        history.push({ name, before: cloneState(before), after: cloneState(after) });
-      }
+      if (after === before) return before;
+      history.push({ name, before: cloneState(before), after: cloneState(after) });
+      store.setState(after);
+      notify(after, before);
       return after;
     },
 
