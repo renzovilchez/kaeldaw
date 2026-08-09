@@ -9,52 +9,18 @@ import { Transport } from "@kaeldaw/audio-engine/Transport";
 import {
   initWasmEffects,
   getDspModule,
-  createWasmDelay,
-  setWasmDelay,
-  processWasmDelay,
-  freeWasmDelay,
-  createWasmReverb,
-  setWasmReverb,
-  processWasmReverb,
-  freeWasmReverb,
 } from "@kaeldaw/audio-engine/WasmEffects";
 import { buildMidiEvents, type MidiEvent } from "../shared/buildMidiEvents";
 
 export type ExportProgress = { percent: number; stage: string };
 
-function createDelay(sr: number) {
-  const h = createWasmDelay(sr, 2);
-  setWasmDelay(h, 0.3, 0.4, 0.3);
-  return h;
-}
-
-function createReverb(sr: number) {
-  const h = createWasmReverb(sr);
-  setWasmReverb(h, 0.5, 0.3, 0.5);
-  return h;
-}
-
-function processFxOnBuffer(
-  buf: Float32Array,
-  sr: number,
-  insertDelay: boolean,
-  insertReverb: boolean,
-  totalSamples: number,
-): void {
-  let dh = -1,
-    rh = -1;
-  if (insertDelay) dh = createDelay(sr);
-  if (insertReverb) rh = createReverb(sr);
-  for (let i = 0; i < totalSamples; i++) {
-    let m = (buf[i * 2] + buf[i * 2 + 1]) * 0.5;
-    if (dh >= 0) m = processWasmDelay(dh, m);
-    if (rh >= 0) m = processWasmReverb(rh, m);
-    buf[i * 2] += m * 0.5;
-    buf[i * 2 + 1] += m * 0.5;
-  }
-  if (dh >= 0) freeWasmDelay(dh);
-  if (rh >= 0) freeWasmReverb(rh);
-}
+type TrackEngine = {
+  engine:
+    | import("@kaeldaw/instruments/PolySynth").PolySynth
+    | import("@kaeldaw/instruments/Sampler").Sampler;
+  events: MidiEvent[];
+  eventIdx: number;
+};
 
 export async function renderProject(
   sampleRate = 44100,
@@ -128,32 +94,40 @@ export async function renderProject(
   const totalSamples = Math.ceil(sr * totalSeconds);
   const masterBuffer = new Float32Array(totalSamples * 2);
 
-  const busBuffers: Map<string, Float32Array> = new Map();
-  for (const bus of buses) {
-    busBuffers.set(bus.id, new Float32Array(totalSamples * 2));
-  }
+  onProgress?.({ percent: 5, stage: "Initializing mixer..." });
 
-  onProgress?.({ percent: 5, stage: "Initializing effects..." });
+  const mixer = new dsp.Mixer(sr);
+  mixer.set_master_volume(masterVolume);
+  for (const ch of channels) {
+    mixer.add_channel(ch.id);
+    mixer.set_channel_volume(ch.id, ch.volume);
+    mixer.set_channel_pan(ch.id, ch.pan);
+    mixer.set_channel_mute(ch.id, ch.mute);
+    mixer.set_channel_solo(ch.id, ch.solo);
+    mixer.set_channel_insert_delay(ch.id, ch.insertFx?.[0]?.enabled ?? false);
+    mixer.set_channel_insert_reverb(ch.id, ch.insertFx?.[1]?.enabled ?? false);
+    for (const send of ch.sends ?? []) {
+      mixer.set_channel_send(ch.id, send.busId, send.level);
+    }
+  }
+  for (const bus of buses) {
+    mixer.add_bus(bus.id);
+    mixer.set_bus_volume(bus.id, bus.volume);
+    const busInsertDelay =
+      bus.insertFx?.find((f) => f.type === "delay")?.enabled ?? false;
+    const busInsertReverb =
+      bus.insertFx?.find((f) => f.type === "reverb")?.enabled ?? false;
+    mixer.set_bus_insert_delay(bus.id, busInsertDelay);
+    mixer.set_bus_insert_reverb(bus.id, busInsertReverb);
+  }
 
   onProgress?.({ percent: 6, stage: "Rendering tracks..." });
 
   const blockSize = 128;
-  const totalProgress = 6;
-  const progressRange = 85;
+  const engines = new Map<string, TrackEngine>();
 
-  let trackIdx = 0;
   for (const [trackId, evs] of trackEvents) {
     const ch = channelMap.get(trackId)!;
-
-    onProgress?.({
-      percent:
-        totalProgress +
-        Math.round((trackIdx / trackEvents.size) * progressRange),
-      stage: `Rendering ${ch.name}...`,
-    });
-
-    const channelBuffer = new Float32Array(totalSamples * 2);
-
     const trackData = useTracksStore
       .getState()
       .tracks.find((t) => t.id === trackId);
@@ -171,118 +145,56 @@ export async function renderProject(
           sampler.setSample(data, meta?.sampleRate ?? sr, rootNote);
         }
       }
-      let eventIdx = 0;
-      for (let s = 0; s < totalSamples; s += blockSize) {
-        const currentSec = s / sr;
-        const currentTick = currentSec / tickDuration;
-        while (eventIdx < evs.length && evs[eventIdx].tick <= currentTick) {
-          const ev = evs[eventIdx++];
-          if (ev.type === "on") sampler.noteOn(ev.note, ev.velocity);
-          else sampler.noteOff(ev.note);
-        }
-        const block = sampler.processBlock(
-          Math.min(blockSize, totalSamples - s),
-        );
-        for (let i = 0; i < block.length; i += 2) {
-          const idx = s + i / 2;
-          channelBuffer[idx * 2] += block[i];
-          channelBuffer[idx * 2 + 1] += block[i + 1];
-        }
-      }
-      sampler.destroy();
+      engines.set(trackId, { engine: sampler, events: evs, eventIdx: 0 });
     } else {
-      const synth = new PolySynth(sr);
-      let eventIdx = 0;
-      for (let s = 0; s < totalSamples; s += blockSize) {
-        const currentSec = s / sr;
-        const currentTick = currentSec / tickDuration;
-        while (eventIdx < evs.length && evs[eventIdx].tick <= currentTick) {
-          const ev = evs[eventIdx++];
-          if (ev.type === "on") synth.noteOn(ev.note, ev.velocity);
-          else synth.noteOff(ev.note);
-        }
-        const block = synth.processBlock(Math.min(blockSize, totalSamples - s));
-        for (let i = 0; i < block.length; i += 2) {
-          const idx = s + i / 2;
-          channelBuffer[idx * 2] += block[i];
-          channelBuffer[idx * 2 + 1] += block[i + 1];
-        }
-      }
-      synth.destroy();
-    }
-
-    // Apply per-channel insert FX
-    const chInsertDelay = ch.insertFx?.[0]?.enabled ?? false;
-    const chInsertReverb = ch.insertFx?.[1]?.enabled ?? false;
-    if (chInsertDelay || chInsertReverb) {
-      let dh = -1,
-        rh = -1;
-      if (chInsertDelay) dh = createDelay(sr);
-      if (chInsertReverb) rh = createReverb(sr);
-      for (let i = 0; i < totalSamples; i++) {
-        let m = (channelBuffer[i * 2] + channelBuffer[i * 2 + 1]) * 0.5;
-        if (dh >= 0) m = processWasmDelay(dh, m);
-        if (rh >= 0) m = processWasmReverb(rh, m);
-        channelBuffer[i * 2] += m * 0.5;
-        channelBuffer[i * 2 + 1] += m * 0.5;
-      }
-      if (dh >= 0) freeWasmDelay(dh);
-      if (rh >= 0) freeWasmReverb(rh);
-    }
-
-    const angle = ((ch.pan + 1) * Math.PI) / 4;
-    const panL = Math.cos(angle);
-    const panR = Math.sin(angle);
-    const vol = ch.volume;
-
-    const chSends = ch.sends ?? [];
-    const reverbSend = chSends.find((s) => s.busId === "reverb-bus");
-
-    for (let i = 0; i < totalSamples; i++) {
-      const l = channelBuffer[i * 2] * vol * panL;
-      const r = channelBuffer[i * 2 + 1] * vol * panR;
-      masterBuffer[i * 2] += l;
-      masterBuffer[i * 2 + 1] += r;
-
-      if (reverbSend && reverbSend.level > 0) {
-        const bus = busBuffers.get("reverb-bus");
-        if (bus) {
-          const sendAmt = (l + r) * 0.5 * reverbSend.level;
-          bus[i * 2] += sendAmt;
-          bus[i * 2 + 1] += sendAmt;
-        }
-      }
-    }
-
-    trackIdx++;
-  }
-
-  onProgress?.({ percent: 92, stage: "Processing buses..." });
-
-  for (const bus of buses) {
-    const buf = busBuffers.get(bus.id);
-    if (!buf) continue;
-
-    const busInsertDelay =
-      bus.insertFx?.find((f) => f.type === "delay")?.enabled ?? false;
-    const busInsertReverb =
-      bus.insertFx?.find((f) => f.type === "reverb")?.enabled ?? false;
-    if (busInsertDelay || busInsertReverb) {
-      processFxOnBuffer(buf, sr, busInsertDelay, busInsertReverb, totalSamples);
-    }
-
-    for (let i = 0; i < totalSamples; i++) {
-      masterBuffer[i * 2] += buf[i * 2] * bus.volume;
-      masterBuffer[i * 2 + 1] += buf[i * 2 + 1] * bus.volume;
+      engines.set(trackId, {
+        engine: new PolySynth(sr),
+        events: evs,
+        eventIdx: 0,
+      });
     }
   }
 
-  onProgress?.({ percent: 97, stage: "Applying master volume..." });
+  for (let s = 0; s < totalSamples; s += blockSize) {
+    const blockLen = Math.min(blockSize, totalSamples - s);
+    const currentTick = (s / sr) / tickDuration;
 
-  for (let i = 0; i < totalSamples; i++) {
-    masterBuffer[i * 2] *= masterVolume;
-    masterBuffer[i * 2 + 1] *= masterVolume;
+    for (const entry of engines.values()) {
+      while (
+        entry.eventIdx < entry.events.length &&
+        entry.events[entry.eventIdx].tick <= currentTick
+      ) {
+        const ev = entry.events[entry.eventIdx++];
+        if (ev.type === "on") entry.engine.noteOn(ev.note, ev.velocity);
+        else entry.engine.noteOff(ev.note);
+      }
+    }
+
+    const buffers = new Map<string, Float32Array>();
+    for (const [trackId, entry] of engines) {
+      buffers.set(trackId, entry.engine.processBlock(blockLen));
+    }
+
+    for (let i = 0; i < blockLen; i++) {
+      for (const [trackId, buf] of buffers) {
+        mixer.process_channel(trackId, buf[i * 2], buf[i * 2 + 1]);
+      }
+      const frame = mixer.finish_frame();
+      const idx = s + i;
+      masterBuffer[idx * 2] = frame[0];
+      masterBuffer[idx * 2 + 1] = frame[1];
+    }
+
+    onProgress?.({
+      percent: 6 + Math.round((s / totalSamples) * 90),
+      stage: "Rendering...",
+    });
   }
+
+  for (const entry of engines.values()) {
+    entry.engine.destroy();
+  }
+  mixer.free();
 
   onProgress?.({ percent: 99, stage: "Encoding WAV..." });
 
