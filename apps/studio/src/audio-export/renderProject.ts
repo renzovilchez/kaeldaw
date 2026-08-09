@@ -65,9 +65,12 @@ export async function renderProject(
   await initWasmEffects();
   const dsp = getDspModule();
   if (!dsp) throw new Error("Failed to load DSP engine");
-  const { setDspModule, PolySynth } =
+  const { setDspModule: setSynthDsp, PolySynth } =
     await import("@kaeldaw/instruments/PolySynth");
-  setDspModule(dsp as Parameters<typeof setDspModule>[0]);
+  const { setDspModule: setSamplerDsp, Sampler } =
+    await import("@kaeldaw/instruments/Sampler");
+  setSynthDsp(dsp as Parameters<typeof setSynthDsp>[0]);
+  setSamplerDsp(dsp as Parameters<typeof setSamplerDsp>[0]);
 
   onProgress?.({ percent: 2, stage: "Reading project..." });
 
@@ -156,7 +159,6 @@ export async function renderProject(
       .tracks.find((t) => t.id === trackId);
     const isSampler = trackData?.presetEngine === "sampler";
     if (isSampler) {
-      const { Sampler } = await import("@kaeldaw/instruments/Sampler");
       const { SampleCache } = await import("@kaeldaw/instruments/SampleCache");
       const sampler = new Sampler(sr);
       const sid = trackData?.sampleId;
