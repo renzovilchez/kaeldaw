@@ -208,9 +208,7 @@ export class PolySynthOutputSingleton {
         this._waveformBuf = new Float32Array(msg.buf);
         this._waveformIdx = this._waveformBuf.length;
       } else if (msg.type === "err") {
-        console.error("Worklet error:", msg.m);
-      } else if (msg.type === "wasm_ok") {
-        console.log("WASM loaded in worklet");
+        console.error("Worklet error:", msg.message);
       }
     };
 
@@ -233,14 +231,29 @@ export class PolySynthOutputSingleton {
 
     this._runLoop();
 
-    // Load WASM module → send to worklet (async, starts worklet with JS fallback first)
+    // Load WASM bytes → send to worklet (the worklet compiles and instantiates)
     try {
       const response = await fetch(wasmUrl);
       const bytes = await response.arrayBuffer();
-      const module = await WebAssembly.compile(bytes);
-      this._worklet.port.postMessage({ type: "wasm", module }, [module]);
+      this._worklet.port.postMessage({ type: "wasm", bytes }, [bytes]);
+      await new Promise<void>((resolve) => {
+        const port = this._worklet!.port;
+        if (typeof port.addEventListener !== "function") {
+          resolve();
+          return;
+        }
+        const timer = setTimeout(resolve, 5000);
+        const listener = (event: MessageEvent) => {
+          if (event.data?.type === "wasm_ok" || event.data?.type === "err") {
+            clearTimeout(timer);
+            port.removeEventListener("message", listener);
+            resolve();
+          }
+        };
+        port.addEventListener("message", listener);
+      });
     } catch (err) {
-      console.warn("WASM load failed, using JS fallback:", err);
+      console.warn("WASM load failed:", err);
     }
   }
 

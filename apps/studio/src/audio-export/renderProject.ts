@@ -98,27 +98,34 @@ export async function renderProject(
 
   const mixer = new dsp.Mixer(sr);
   mixer.set_master_volume(masterVolume);
-  for (const ch of channels) {
-    mixer.add_channel(ch.id);
-    mixer.set_channel_volume(ch.id, ch.volume);
-    mixer.set_channel_pan(ch.id, ch.pan);
-    mixer.set_channel_mute(ch.id, ch.mute);
-    mixer.set_channel_solo(ch.id, ch.solo);
-    mixer.set_channel_insert_delay(ch.id, ch.insertFx?.[0]?.enabled ?? false);
-    mixer.set_channel_insert_reverb(ch.id, ch.insertFx?.[1]?.enabled ?? false);
-    for (const send of ch.sends ?? []) {
-      mixer.set_channel_send(ch.id, send.busId, send.level);
-    }
-  }
+  const channelIndex = new Map<string, number>();
+  const busIndex = new Map<string, number>();
   for (const bus of buses) {
-    mixer.add_bus(bus.id);
-    mixer.set_bus_volume(bus.id, bus.volume);
+    const index = mixer.add_bus();
+    busIndex.set(bus.id, index);
+    mixer.set_bus_volume(index, bus.volume);
     const busInsertDelay =
       bus.insertFx?.find((f) => f.type === "delay")?.enabled ?? false;
     const busInsertReverb =
       bus.insertFx?.find((f) => f.type === "reverb")?.enabled ?? false;
-    mixer.set_bus_insert_delay(bus.id, busInsertDelay);
-    mixer.set_bus_insert_reverb(bus.id, busInsertReverb);
+    mixer.set_bus_insert_delay(index, busInsertDelay);
+    mixer.set_bus_insert_reverb(index, busInsertReverb);
+  }
+  for (const ch of channels) {
+    const index = mixer.add_channel();
+    channelIndex.set(ch.id, index);
+    mixer.set_channel_volume(index, ch.volume);
+    mixer.set_channel_pan(index, ch.pan);
+    mixer.set_channel_mute(index, ch.mute);
+    mixer.set_channel_solo(index, ch.solo);
+    mixer.set_channel_insert_delay(index, ch.insertFx?.[0]?.enabled ?? false);
+    mixer.set_channel_insert_reverb(index, ch.insertFx?.[1]?.enabled ?? false);
+    for (const send of ch.sends ?? []) {
+      const busIdx = busIndex.get(send.busId);
+      if (busIdx !== undefined) {
+        mixer.set_channel_send(index, busIdx, send.level);
+      }
+    }
   }
 
   onProgress?.({ percent: 6, stage: "Rendering tracks..." });
@@ -177,12 +184,12 @@ export async function renderProject(
 
     for (let i = 0; i < blockLen; i++) {
       for (const [trackId, buf] of buffers) {
-        mixer.process_channel(trackId, buf[i * 2], buf[i * 2 + 1]);
+        mixer.process_channel_index(channelIndex.get(trackId) ?? 0, buf[i * 2], buf[i * 2 + 1]);
       }
-      const frame = mixer.finish_frame();
+      mixer.finish_frame();
       const idx = s + i;
-      masterBuffer[idx * 2] = frame[0];
-      masterBuffer[idx * 2 + 1] = frame[1];
+      masterBuffer[idx * 2] = mixer.get_master_left();
+      masterBuffer[idx * 2 + 1] = mixer.get_master_right();
     }
 
     onProgress?.({
