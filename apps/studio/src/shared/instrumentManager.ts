@@ -170,10 +170,17 @@ class InstrumentManager {
     name: string,
     engine: "synth" | "sampler" = "synth",
     sampleId?: string,
-  ): void {
+  ): boolean {
+    const trimmed = name.trim();
+    if (!trimmed) return false;
+    const exists = this._presets.some(
+      (p) =>
+        p.name.toLowerCase() === trimmed.toLowerCase() && p.engine === engine,
+    );
+    if (exists) return false;
     const preset: InstrumentPreset = {
       id: `custom-${Date.now()}`,
-      name,
+      name: trimmed,
       category: "Custom",
       icon: "🎛",
       engine,
@@ -186,6 +193,7 @@ class InstrumentManager {
     this._version++;
     this._notify();
     saveCustomPresets(this._presets.filter((p) => p.id.startsWith("custom-")));
+    return true;
   }
 
   get version(): number {

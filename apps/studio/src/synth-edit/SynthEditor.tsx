@@ -21,6 +21,9 @@ function SynthEditorInner() {
   const [sampleFile, setSampleFile] = useState(preset?.sampleId ?? "");
   const [sampleDuration, setSampleDuration] = useState("");
   const [isModified, setIsModified] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveName, setSaveName] = useState("");
+  const [saveError, setSaveError] = useState("");
 
   const isSampler = preset?.engine === "sampler";
   const isAlreadySaved = !isModified && preset?.id.startsWith("custom-");
@@ -76,15 +79,25 @@ function SynthEditorInner() {
     input.click();
   }, []);
 
-  const handleSavePreset = useCallback(() => {
-    const name = prompt("Preset name:", preset?.name ?? "Custom");
-    if (name)
-      instrumentManager.saveCustomPreset(
-        name,
-        isSampler ? "sampler" : "synth",
-        localConfig.sampleId as string,
-      );
-  }, [preset, isSampler, localConfig]);
+  const startSave = useCallback(() => {
+    setSaveName("Custom");
+    setSaveError("");
+    setSaving(true);
+  }, []);
+
+  const confirmSave = useCallback(() => {
+    const ok = instrumentManager.saveCustomPreset(
+      saveName,
+      isSampler ? "sampler" : "synth",
+      localConfig.sampleId as string,
+    );
+    if (ok) {
+      setSaving(false);
+      setSaveError("");
+    } else {
+      setSaveError("Ya existe un preset con ese nombre");
+    }
+  }, [saveName, isSampler, localConfig]);
 
   const octaveOffset = 4;
 
@@ -170,17 +183,56 @@ function SynthEditorInner() {
             ));
           })()}
         </select>
-        <button
-          className={`px-2 py-1 rounded text-[10px] transition-colors ${
-            isAlreadySaved
-              ? "bg-[#3a3a3a] text-[#666] cursor-not-allowed"
-              : "bg-[#4a4a4a] text-[#ccc] hover:bg-[#555]"
-          }`}
-          disabled={isAlreadySaved}
-          onClick={handleSavePreset}
-        >
-          Save
-        </button>
+        {saving ? (
+          <div className="flex items-center gap-1">
+            <input
+              className="bg-[#3a3a3a] border border-[#555] rounded px-2 py-1 text-[11px] text-[#ccc] w-28"
+              value={saveName}
+              onChange={(e) => {
+                setSaveName(e.target.value);
+                setSaveError("");
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") confirmSave();
+                if (e.key === "Escape") {
+                  setSaving(false);
+                  setSaveError("");
+                }
+              }}
+              autoFocus
+            />
+            <button
+              className="px-2 py-1 rounded bg-[#3b82f6] text-white text-[10px] hover:bg-[#2563eb]"
+              onClick={confirmSave}
+            >
+              OK
+            </button>
+            <button
+              className="px-2 py-1 rounded bg-[#4a4a4a] text-[#ccc] text-[10px] hover:bg-[#555]"
+              onClick={() => {
+                setSaving(false);
+                setSaveError("");
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        ) : (
+          <button
+            className={`px-2 py-1 rounded text-[10px] transition-colors ${
+              isAlreadySaved
+                ? "bg-[#3a3a3a] text-[#666] cursor-not-allowed"
+                : "bg-[#4a4a4a] text-[#ccc] hover:bg-[#555]"
+            }`}
+            disabled={isAlreadySaved}
+            onClick={startSave}
+          >
+            Save
+          </button>
+        )}
+        {saveError && (
+          <span className="text-[10px] text-[#f87171]">{saveError}</span>
+        )}
       </div>
 
       {isSampler && (
