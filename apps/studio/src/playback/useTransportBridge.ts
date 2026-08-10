@@ -30,10 +30,17 @@ export function useTransportBridge() {
 
   useEffect(() => {
     if (state === "playing") {
-      AudioContextManager.init();
-      void AudioContextManager.resume();
-      Transport.play();
-      Clock.start();
+      let cancelled = false;
+      (async () => {
+        AudioContextManager.init();
+        await AudioContextManager.resume();
+        if (cancelled) return;
+        Transport.play();
+        Clock.start();
+      })();
+      return () => {
+        cancelled = true;
+      };
     } else if (state === "paused") {
       Clock.stop();
       Transport.pause();
