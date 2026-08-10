@@ -1,7 +1,7 @@
 import { useState, useRef, memo } from "react";
-import { useTransportStore } from "@kaeldaw/project/useTransportStore";
 import { useUndoStore } from "@kaeldaw/project/useUndoStore";
 import { useWindowManager } from "../../shared/components/useWindowManager";
+import { useCore, project } from "../../stores/useCoreStore";
 
 const MIN_BEATS = 1;
 const MAX_BEATS = 32;
@@ -28,24 +28,20 @@ function formatPosition(
 }
 
 const TransportControls = memo(function TransportControls() {
-  const play = useTransportStore((s) => s.play);
-  const pause = useTransportStore((s) => s.pause);
-  const stop = useTransportStore((s) => s.stop);
-  const transportState = useTransportStore((s) => s.state);
-  const position = useTransportStore((s) => s.position);
-  const ppqn = useTransportStore((s) => s.ppqn);
-  const ts = useTransportStore((s) => s.timeSignature);
+  const transportState = useCore((s) => s.transport.state);
+  const position = useCore((s) => s.transport.position);
+  const ppqn = useCore((s) => s.ppqn);
+  const ts = useCore((s) => s.timeSignature);
   const isPlaying = transportState === "playing";
-  const metronomeEnabled = useTransportStore((s) => s.metronomeEnabled);
-  const toggleMetronome = useTransportStore((s) => s.toggleMetronome);
+  const metronomeEnabled = useCore((s) => s.transport.metronomeEnabled);
 
   return (
     <>
       <button
         className="w-7 h-7 flex items-center justify-center bg-[#4a4a4a] hover:bg-[#555] active:bg-[#666] rounded text-white text-sm"
         onClick={() => {
-          if (isPlaying) pause();
-          else play();
+          if (isPlaying) project.pause();
+          else project.play();
         }}
         title={isPlaying ? "Pause" : "Play"}
       >
@@ -53,7 +49,7 @@ const TransportControls = memo(function TransportControls() {
       </button>
       <button
         className="w-7 h-7 flex items-center justify-center bg-[#4a4a4a] hover:bg-[#555] active:bg-[#666] rounded text-[#999] text-sm"
-        onClick={stop}
+        onClick={() => project.stop()}
         title="Stop"
       >
         ⏹
@@ -64,7 +60,7 @@ const TransportControls = memo(function TransportControls() {
             ? "bg-[#3b82f6] text-white"
             : "bg-[#4a4a4a] hover:bg-[#555] text-[#999]"
         }`}
-        onClick={toggleMetronome}
+        onClick={() => project.toggleMetronome()}
         title={metronomeEnabled ? "Metronome ON" : "Metronome OFF"}
       >
         {metronomeEnabled ? "♫" : "♪"}
@@ -80,10 +76,8 @@ const TransportControls = memo(function TransportControls() {
 });
 
 const TimeSignaturePanel = memo(function TimeSignaturePanel() {
-  const bpm = useTransportStore((s) => s.bpm);
-  const setBpm = useTransportStore((s) => s.setBpm);
-  const ts = useTransportStore((s) => s.timeSignature);
-  const setTimeSignature = useTransportStore((s) => s.setTimeSignature);
+  const bpm = useCore((s) => s.bpm);
+  const ts = useCore((s) => s.timeSignature);
 
   const [bpmInput, setBpmInput] = useState(String(bpm));
   const [beatsInput, setBeatsInput] = useState(String(ts.beats));
@@ -93,7 +87,7 @@ const TimeSignaturePanel = memo(function TimeSignaturePanel() {
     const v = e.target.value;
     setBpmInput(v);
     const n = Number(v);
-    if (!isNaN(n) && n >= 1 && n <= 999) setBpm(n);
+    if (!isNaN(n) && n >= 1 && n <= 999) project.setTempo(n);
   };
 
   const handleBeatsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -101,7 +95,7 @@ const TimeSignaturePanel = memo(function TimeSignaturePanel() {
     setBeatsInput(v);
     const n = Number(v);
     if (!isNaN(n) && n >= MIN_BEATS && n <= MAX_BEATS)
-      setTimeSignature(n, ts.beatValue);
+      project.setTimeSignature({ beats: n, beatValue: ts.beatValue });
   };
 
   const handleBeatValChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -109,7 +103,7 @@ const TimeSignaturePanel = memo(function TimeSignaturePanel() {
     setBeatValInput(v);
     const n = Number(v);
     if (!isNaN(n) && n >= MIN_BEATVAL && n <= MAX_BEATVAL)
-      setTimeSignature(ts.beats, n);
+      project.setTimeSignature({ beats: ts.beats, beatValue: n });
   };
 
   return (
@@ -143,7 +137,7 @@ const TimeSignaturePanel = memo(function TimeSignaturePanel() {
 });
 
 const TransportStateLabel = memo(function TransportStateLabel() {
-  const state = useTransportStore((s) => s.state);
+  const state = useCore((s) => s.transport.state);
   return (
     <span
       className={`text-[10px] font-semibold ${

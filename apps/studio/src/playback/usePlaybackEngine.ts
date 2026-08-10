@@ -3,13 +3,14 @@ import { PolySynthOutput } from "@kaeldaw/instruments/PolySynthOutput";
 import { Transport } from "@kaeldaw/audio-engine/Transport";
 import { instrumentManager } from "../shared/instrumentManager";
 import { buildMidiEvents } from "../shared/buildMidiEvents";
-import { project } from "../stores/useCoreStore";
+import { project, useCore } from "../stores/useCoreStore";
 
 export function usePlaybackEngine(
-  transportState: string,
   setMeterLevel: (id: string, level: number) => void,
   setMasterMeterLevel: (level: number) => void,
 ) {
+  const transportState = useCore((s) => s.transport.state);
+
   useEffect(() => {
     let cancelled = false;
 

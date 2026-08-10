@@ -6,7 +6,6 @@ import {
   memo,
   type MutableRefObject,
 } from "react";
-import { useTransportStore } from "@kaeldaw/project/useTransportStore";
 import type { MidiNoteData } from "@kaeldaw/project/useClipsStore";
 import { useMidiStore } from "@kaeldaw/project/useMidiStore";
 import { useUndoStore, type UndoContext } from "@kaeldaw/project/useUndoStore";
@@ -53,7 +52,7 @@ export const TimelineWindow = memo(function TimelineWindow({
   redoRefs: MutableRefObject<Record<UndoContext, (() => void) | null>>;
 }) {
   const tracks = useCore((s) => s.tracks);
-  const position = useTransportStore((s) => s.position);
+  const position = useCore((s) => s.transport.position);
   const clips = useCore((s) => s.clips);
   const { open } = useWindowManager();
   const elRef = useRef<TimelineWC>(null);

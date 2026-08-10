@@ -1,6 +1,5 @@
 import { useRef, useEffect, useMemo, useCallback } from "react";
 import { useMixerStore } from "@kaeldaw/project/useMixerStore";
-import { useTransportStore } from "@kaeldaw/project/useTransportStore";
 import { useUndoStore } from "@kaeldaw/project/useUndoStore";
 import { useCore, project } from "./stores/useCoreStore";
 import { saveProjectFile, loadProjectFile } from "./stores/projectFiles";
@@ -17,6 +16,7 @@ import { ExportProgressDialog } from "./audio-export/ExportProgressDialog";
 import { instrumentManager } from "./shared/instrumentManager";
 import { usePlaybackEngine } from "./playback/usePlaybackEngine";
 import { useMetronomeSync } from "./playback/useMetronomeSync";
+import { useTransportBridge } from "./playback/useTransportBridge";
 import { useSyncPresetToTrack } from "./instruments/hooks/useSyncPresetToTrack";
 import { useExport } from "./audio-export/hooks/useExport";
 import { useSidebarWidth } from "./shared/hooks/useSidebarWidth";
@@ -51,8 +51,7 @@ export default function App() {
   const setMeterLevel = useMixerStore((s) => s.setMeterLevel);
   const setMasterMeterLevel = useMixerStore((s) => s.setMasterMeterLevel);
   const projectName = useCore((s) => s.name);
-  const transportState = useTransportStore((s) => s.state);
-  const metronomeEnabled = useTransportStore((s) => s.metronomeEnabled);
+  const metronomeEnabled = useCore((s) => s.transport.metronomeEnabled);
   const setFocusedContext = useUndoStore((s) => s.setFocusedContext);
 
   const undoFnsRef = useRef<Record<string, (() => void) | null>>({
@@ -146,7 +145,8 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [handleUndo, handleRedo]);
 
-  usePlaybackEngine(transportState, setMeterLevel, setMasterMeterLevel);
+  useTransportBridge();
+  usePlaybackEngine(setMeterLevel, setMasterMeterLevel);
   useMetronomeSync(metronomeEnabled);
   useSyncPresetToTrack();
 

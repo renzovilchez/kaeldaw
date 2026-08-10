@@ -5,9 +5,9 @@ import {
   memo,
   type MutableRefObject,
 } from "react";
-import { useTransportStore } from "@kaeldaw/project/useTransportStore";
 import { useMidiStore } from "@kaeldaw/project/useMidiStore";
 import { useUndoStore, type UndoContext } from "@kaeldaw/project/useUndoStore";
+import { useCore } from "../stores/useCoreStore";
 import type { MidiNoteData } from "@kaeldaw/project/useClipsStore";
 import { PolySynthOutput } from "@kaeldaw/instruments/PolySynthOutput";
 import { AudioContextManager } from "@kaeldaw/audio-engine/AudioContextManager";
@@ -39,7 +39,7 @@ export const PianoRollWindow = memo(function PianoRollWindow({
   undoRefs: MutableRefObject<Record<UndoContext, (() => void) | null>>;
   redoRefs: MutableRefObject<Record<UndoContext, (() => void) | null>>;
 }) {
-  const position = useTransportStore((s) => s.position);
+  const position = useCore((s) => s.transport.position);
   const notes = useMidiStore((s) => s.notes);
   const clipId = useMidiStore((s) => s.clipId);
   const addNote = useMidiStore((s) => s.addNote);
@@ -49,7 +49,7 @@ export const PianoRollWindow = memo(function PianoRollWindow({
   const elRef = useRef<PianoRollWC>(null);
   const previewStartedRef = useRef(false);
   const previewStateRef = useRef(new Map<number, boolean>());
-  const transportState = useTransportStore((s) => s.state);
+  const transportState = useCore((s) => s.transport.state);
   useEffect(() => {
     if (transportState !== "playing") previewStartedRef.current = false;
   }, [transportState]);
