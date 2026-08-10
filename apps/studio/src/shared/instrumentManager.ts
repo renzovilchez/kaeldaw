@@ -146,9 +146,9 @@ class InstrumentManager {
     this._notify();
   }
 
-  setEngine(channelId: string, engine: "synth" | "sampler"): void {
+  setEngine(channelId: string, _engine: "synth" | "sampler"): void {
     PolySynthOutput.setChannelVolume(channelId, 1, 0, false);
-    PolySynthOutput.setConfig({ engine } as Record<string, unknown>);
+    PolySynthOutput.setConfig(this.getSelectedConfig());
   }
 
   getSelectedConfig(): Record<string, unknown> {
@@ -157,7 +157,10 @@ class InstrumentManager {
   }
 
   updateConfig(changes: Record<string, unknown>): void {
-    PolySynthOutput.setConfig(changes);
+    PolySynthOutput.setConfig({
+      ...this.getSelectedConfig(),
+      ...changes,
+    });
     this._isModified = true;
     this._version++;
     this._notify();
