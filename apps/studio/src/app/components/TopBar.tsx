@@ -1,5 +1,4 @@
 import { useState, useRef, memo } from "react";
-import { useUndoStore } from "@kaeldaw/project/useUndoStore";
 import { useWindowManager } from "../../shared/components/useWindowManager";
 import { useCore, project } from "../../stores/useCoreStore";
 
@@ -153,13 +152,6 @@ const TransportStateLabel = memo(function TransportStateLabel() {
   );
 });
 
-const CONTEXT_LABEL: Record<string, string> = {
-  timeline: "Timeline",
-  pianoRoll: "Piano Roll",
-  mixer: "Mixer",
-  tracks: "Tracks",
-};
-
 const ActionButtons = memo(function ActionButtons({
   onSave,
   onLoad,
@@ -173,11 +165,9 @@ const ActionButtons = memo(function ActionButtons({
   onUndo: () => void;
   onRedo: () => void;
 }) {
-  const focusedContext = useUndoStore((s) => s.focusedContext);
-  const canUndoMap = useUndoStore((s) => s.canUndo);
-  const canRedoMap = useUndoStore((s) => s.canRedo);
-  const canUndo = focusedContext ? canUndoMap[focusedContext] : false;
-  const canRedo = focusedContext ? canRedoMap[focusedContext] : false;
+  useCore((s) => s.meta.historyVersion);
+  const canUndo = project.canUndo;
+  const canRedo = project.canRedo;
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -217,13 +207,9 @@ const ActionButtons = memo(function ActionButtons({
             : "bg-[#333] text-[#555] cursor-default"
         }`}
         onClick={canUndo ? onUndo : undefined}
-        title={
-          focusedContext
-            ? `Undo ${CONTEXT_LABEL[focusedContext]} (Ctrl+Z)`
-            : "Undo (Ctrl+Z)"
-        }
+        title="Undo (Ctrl+Z)"
       >
-        ↩{focusedContext ? ` ${CONTEXT_LABEL[focusedContext]}` : ""}
+        ↩
       </button>
       <button
         className={`px-2 py-1 rounded text-[10px] transition-colors ${
@@ -232,13 +218,9 @@ const ActionButtons = memo(function ActionButtons({
             : "bg-[#333] text-[#555] cursor-default"
         }`}
         onClick={canRedo ? onRedo : undefined}
-        title={
-          focusedContext
-            ? `Redo ${CONTEXT_LABEL[focusedContext]} (Ctrl+Y)`
-            : "Redo (Ctrl+Y)"
-        }
+        title="Redo (Ctrl+Y)"
       >
-        ↪{focusedContext ? ` ${CONTEXT_LABEL[focusedContext]}` : ""}
+        ↪
       </button>
       <button
         className="px-2 py-1 rounded text-[10px] bg-[#3b82f6] hover:bg-[#2563eb] text-white transition-colors"

@@ -1,6 +1,5 @@
-import { useRef, useEffect, useMemo, useCallback } from "react";
+import { useEffect, useMemo, useCallback } from "react";
 import { useMixerStore } from "@kaeldaw/project/useMixerStore";
-import { useUndoStore } from "@kaeldaw/project/useUndoStore";
 import { useCore, project } from "./stores/useCoreStore";
 import { saveProjectFile, loadProjectFile } from "./stores/projectFiles";
 import { TopBar } from "./app/components/TopBar";
@@ -20,8 +19,6 @@ import { useTransportBridge } from "./playback/useTransportBridge";
 import { useSyncPresetToTrack } from "./instruments/hooks/useSyncPresetToTrack";
 import { useExport } from "./audio-export/hooks/useExport";
 import { useSidebarWidth } from "./shared/hooks/useSidebarWidth";
-import { createUndoRedo } from "./shared/hooks/useRegisterUndoRedo";
-import { WINDOW_TO_CTX } from "./shared/constants";
 import {
   handleVolumeChange,
   handlePanChange,
@@ -52,76 +49,13 @@ export default function App() {
   const setMasterMeterLevel = useMixerStore((s) => s.setMasterMeterLevel);
   const projectName = useCore((s) => s.name);
   const metronomeEnabled = useCore((s) => s.transport.metronomeEnabled);
-  const setFocusedContext = useUndoStore((s) => s.setFocusedContext);
-
-  const undoFnsRef = useRef<Record<string, (() => void) | null>>({
-    timeline: null,
-    pianoRoll: null,
-    mixer: null,
-    tracks: null,
-  });
-  const redoFnsRef = useRef<Record<string, (() => void) | null>>({
-    timeline: null,
-    pianoRoll: null,
-    mixer: null,
-    tracks: null,
-  });
-
-  useEffect(() => {
-    const undo = undoFnsRef.current;
-    const redo = redoFnsRef.current;
-
-    const mixer = createUndoRedo(
-      "mixer",
-      () => {
-        const m = project.state.mixer;
-        return {
-          channels: m.channels.map((ch) => ({ ...ch })),
-          masterVolume: m.masterVolume,
-        };
-      },
-      (snap) =>
-        project.apply({
-          mixer: {
-            ...project.state.mixer,
-            channels: snap.channels,
-            masterVolume: snap.masterVolume ?? 1,
-          },
-        }),
-    );
-    const tracksUndo = createUndoRedo(
-      "tracks",
-      () =>
-        project.state.tracks.map((t) => ({
-          id: t.id,
-          name: t.name,
-          color: t.color,
-          presetId: t.presetId,
-          presetEngine: t.presetEngine,
-          sampleId: t.sampleId,
-        })),
-      (tracksSnap) => project.apply({ tracks: tracksSnap }),
-    );
-    undo.mixer = mixer.undo;
-    redo.mixer = mixer.redo;
-    undo.tracks = tracksUndo.undo;
-    redo.tracks = tracksUndo.redo;
-    return () => {
-      undo.mixer = null;
-      redo.mixer = null;
-      undo.tracks = null;
-      redo.tracks = null;
-    };
-  }, []);
 
   const handleUndo = useCallback(() => {
-    const ctx = useUndoStore.getState().focusedContext;
-    if (ctx) undoFnsRef.current[ctx]?.();
+    project.undo();
   }, []);
 
   const handleRedo = useCallback(() => {
-    const ctx = useUndoStore.getState().focusedContext;
-    if (ctx) redoFnsRef.current[ctx]?.();
+    project.redo();
   }, []);
 
   useEffect(() => {
@@ -158,11 +92,6 @@ export default function App() {
     [channels],
   );
 
-  const handleFocus = (id: string) => {
-    const ctx = WINDOW_TO_CTX[id];
-    if (ctx) setFocusedContext(ctx);
-  };
-
   return (
     <WindowManagerProvider>
       <div className="h-screen bg-[#2a2a2a] text-[#ccc] text-sm select-none flex flex-col overflow-hidden">
@@ -183,27 +112,15 @@ export default function App() {
           />
 
           <div className="flex-1 relative overflow-hidden">
-            <FloatingWindow
-              id="timeline"
-              sidebarWidth={sidebarWidth}
-              onFocus={handleFocus}
-            >
-              <TimelineWindow undoRefs={undoFnsRef} redoRefs={redoFnsRef} />
+            <FloatingWindow id="timeline" sidebarWidth={sidebarWidth}>
+              <TimelineWindow />
             </FloatingWindow>
 
-            <FloatingWindow
-              id="piano-roll"
-              sidebarWidth={sidebarWidth}
-              onFocus={handleFocus}
-            >
-              <PianoRollWindow undoRefs={undoFnsRef} redoRefs={redoFnsRef} />
+            <FloatingWindow id="piano-roll" sidebarWidth={sidebarWidth}>
+              <PianoRollWindow />
             </FloatingWindow>
 
-            <FloatingWindow
-              id="mixer"
-              sidebarWidth={sidebarWidth}
-              onFocus={handleFocus}
-            >
+            <FloatingWindow id="mixer" sidebarWidth={sidebarWidth}>
               <MixerPanel
                 channels={channels.map((ch) => ({
                   ...ch,
@@ -229,11 +146,7 @@ export default function App() {
               />
             </FloatingWindow>
 
-            <FloatingWindow
-              id="tracks"
-              sidebarWidth={sidebarWidth}
-              onFocus={handleFocus}
-            >
+            <FloatingWindow id="tracks" sidebarWidth={sidebarWidth}>
               <TrackList
                 tracks={tracks}
                 selectedId={selectedId}

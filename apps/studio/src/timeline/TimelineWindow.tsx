@@ -4,15 +4,12 @@ import {
   createElement,
   useCallback,
   memo,
-  type MutableRefObject,
 } from "react";
 import type { MidiNoteData } from "@kaeldaw/project/useClipsStore";
-import { useMidiStore } from "@kaeldaw/project/useMidiStore";
-import { useUndoStore, type UndoContext } from "@kaeldaw/project/useUndoStore";
 import { useWindowManager } from "../shared/components/useWindowManager";
 import { PPQN_TO_VISUAL } from "../shared/constants";
-import { createUndoRedo } from "../shared/hooks/useRegisterUndoRedo";
 import { useCore, project } from "../stores/useCoreStore";
+import { usePianoClipStore } from "../stores/usePianoClipStore";
 
 interface TimelineClipData {
   id: number;
@@ -44,13 +41,7 @@ interface TimelineWC extends HTMLElement {
   getClips(): TimelineClipData[];
 }
 
-export const TimelineWindow = memo(function TimelineWindow({
-  undoRefs,
-  redoRefs,
-}: {
-  undoRefs: MutableRefObject<Record<UndoContext, (() => void) | null>>;
-  redoRefs: MutableRefObject<Record<UndoContext, (() => void) | null>>;
-}) {
+export const TimelineWindow = memo(function TimelineWindow() {
   const tracks = useCore((s) => s.tracks);
   const position = useCore((s) => s.transport.position);
   const clips = useCore((s) => s.clips);
@@ -105,41 +96,10 @@ export const TimelineWindow = memo(function TimelineWindow({
     removeClip: project.removeClip,
   });
 
-  useEffect(() => {
-    const undoStore = undoRefs.current;
-    const redoStore = redoRefs.current;
-
-    const { undo, redo } = createUndoRedo(
-      "timeline",
-      () => ({
-        clips: project.state.clips.map((c) => ({
-          ...c,
-          notes: c.notes.map((n) => ({ ...n })),
-        })),
-      }),
-      (snap) => project.apply({ clips: snap.clips }),
-    );
-    undoStore.timeline = undo;
-    redoStore.timeline = redo;
-    return () => {
-      undoStore.timeline = null;
-      redoStore.timeline = null;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const loadMidi = useCallback(() => {
     const wc = elRef.current;
     if (!wc) return;
-    const clipId = wc.selectedClipId;
-    if (clipId === null) {
-      useMidiStore.getState().clear();
-      return;
-    }
-    const clip = project.state.clips.find((c) => c.id === clipId);
-    if (clip) {
-      useMidiStore.getState().loadForClip(clipId, clip.notes);
-    }
+    usePianoClipStore.getState().setClipId(wc.selectedClipId);
   }, []);
 
   useEffect(() => {
@@ -158,12 +118,6 @@ export const TimelineWindow = memo(function TimelineWindow({
       if (!wc) return;
       const trackId = trackIdAt(d.trackIndex);
       if (!trackId) return;
-      useUndoStore.getState().executeAction("timeline", () => ({
-        clips: project.state.clips.map((c) => ({
-          ...c,
-          notes: c.notes.map((n) => ({ ...n })),
-        })),
-      }));
       const wcId = wc.addClip(
         d.trackIndex,
         d.tick,
@@ -187,15 +141,6 @@ export const TimelineWindow = memo(function TimelineWindow({
         },
         wcId,
       );
-    };
-
-    const onBeforeClipAction = () => {
-      useUndoStore.getState().executeAction("timeline", () => ({
-        clips: project.state.clips.map((c) => ({
-          ...c,
-          notes: c.notes.map((n) => ({ ...n })),
-        })),
-      }));
     };
 
     const onClipMove = (e: Event) => {
@@ -227,7 +172,6 @@ export const TimelineWindow = memo(function TimelineWindow({
       openPianoRoll("piano-roll");
     };
 
-    el.addEventListener("before-clip-action", onBeforeClipAction);
     el.addEventListener("timeline-click", onTimelineClick);
     el.addEventListener("clip-move", onClipMove);
     el.addEventListener("clip-resize", onClipResize);
@@ -236,7 +180,6 @@ export const TimelineWindow = memo(function TimelineWindow({
     el.addEventListener("clip-select", onClipSelect);
     el.addEventListener("clip-dblclick", onClipDblClick);
     return () => {
-      el.removeEventListener("before-clip-action", onBeforeClipAction);
       el.removeEventListener("timeline-click", onTimelineClick);
       el.removeEventListener("clip-move", onClipMove);
       el.removeEventListener("clip-resize", onClipResize);

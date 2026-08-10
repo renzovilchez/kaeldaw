@@ -1,15 +1,12 @@
 import { PolySynthOutput } from "@kaeldaw/instruments/PolySynthOutput";
 import { instrumentManager } from "../shared/instrumentManager";
-import { tracksExec } from "./execWithUndo";
 import { project } from "../stores/useCoreStore";
 
 export function handleAddTrack() {
-  tracksExec(() => {
-    const name = `Track ${project.state.tracks.length + 1}`;
-    const id = project.addTrack(name);
-    const track = project.state.tracks.find((t) => t.id === id);
-    if (track) project.addChannel({ id: track.id, name: track.name });
-  });
+  const name = `Track ${project.state.tracks.length + 1}`;
+  const id = project.addTrack(name);
+  const track = project.state.tracks.find((t) => t.id === id);
+  if (track) project.addChannel({ id: track.id, name: track.name });
 }
 
 export function handleSelectTrack(id: string) {

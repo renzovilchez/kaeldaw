@@ -3,18 +3,15 @@ import {
   useEffect,
   createElement,
   memo,
-  type MutableRefObject,
 } from "react";
-import { useMidiStore } from "@kaeldaw/project/useMidiStore";
-import { useUndoStore, type UndoContext } from "@kaeldaw/project/useUndoStore";
-import { useCore } from "../stores/useCoreStore";
-import type { MidiNoteData } from "@kaeldaw/project/useClipsStore";
+import { useCore, project } from "../stores/useCoreStore";
+import { usePianoClipId } from "../stores/usePianoClipStore";
+import type { CoreMidiNote } from "@kaeldaw/project/core";
 import { PolySynthOutput } from "@kaeldaw/instruments/PolySynthOutput";
 import { AudioContextManager } from "@kaeldaw/audio-engine/AudioContextManager";
 import { useSyncNotesToWC } from "./hooks/useSyncNotesToWC";
 import { instrumentManager } from "../shared/instrumentManager";
 import { PPQN_TO_VISUAL } from "../shared/constants";
-import { createUndoRedo } from "../shared/hooks/useRegisterUndoRedo";
 
 interface PianoRollWC extends HTMLElement {
   playheadTick: number;
@@ -29,27 +26,27 @@ interface PianoRollWC extends HTMLElement {
     color: string,
     id?: number,
   ): void;
-  getNotes(): MidiNoteData[];
+  getNotes(): CoreMidiNote[];
 }
 
-export const PianoRollWindow = memo(function PianoRollWindow({
-  undoRefs,
-  redoRefs,
-}: {
-  undoRefs: MutableRefObject<Record<UndoContext, (() => void) | null>>;
-  redoRefs: MutableRefObject<Record<UndoContext, (() => void) | null>>;
-}) {
+const EMPTY_NOTES: CoreMidiNote[] = [];
+
+export const PianoRollWindow = memo(function PianoRollWindow() {
   const position = useCore((s) => s.transport.position);
-  const notes = useMidiStore((s) => s.notes);
-  const clipId = useMidiStore((s) => s.clipId);
-  const addNote = useMidiStore((s) => s.addNote);
-  const moveNote = useMidiStore((s) => s.moveNote);
-  const resizeNote = useMidiStore((s) => s.resizeNote);
-  const removeNote = useMidiStore((s) => s.removeNote);
+  const clipId = usePianoClipId();
+  const notes = useCore((s) => {
+    if (clipId === null) return EMPTY_NOTES;
+    return s.clips.find((c) => c.id === clipId)?.notes ?? EMPTY_NOTES;
+  });
   const elRef = useRef<PianoRollWC>(null);
   const previewStartedRef = useRef(false);
   const previewStateRef = useRef(new Map<number, boolean>());
   const transportState = useCore((s) => s.transport.state);
+  const clipIdRef = useRef(clipId);
+  useEffect(() => {
+    clipIdRef.current = clipId;
+  }, [clipId]);
+
   useEffect(() => {
     if (transportState !== "playing") previewStartedRef.current = false;
   }, [transportState]);
@@ -62,51 +59,16 @@ export const PianoRollWindow = memo(function PianoRollWindow({
 
   useSyncNotesToWC(elRef, notes, clipId);
 
-  const handlersRef = useRef({ addNote, moveNote, resizeNote, removeNote });
-  useEffect(() => {
-    handlersRef.current = { addNote, moveNote, resizeNote, removeNote };
-  }, [addNote, moveNote, resizeNote, removeNote]);
-
-  useEffect(() => {
-    const undoStore = undoRefs.current;
-    const redoStore = redoRefs.current;
-
-    const { undo, redo } = createUndoRedo("pianoRoll",
-      () => ({ notes: elRef.current?.getNotes() ?? [], clipId: useMidiStore.getState().clipId }),
-      (snap) => {
-        const wc = elRef.current;
-        if (!wc || snap.clipId === null) return;
-        wc.clearNotes();
-        for (const n of snap.notes) wc.addNote(n.note, n.startTick, n.durationTicks, n.velocity, n.color ?? "#22d3ee", n.id);
-        useMidiStore.setState({ clipId: snap.clipId, notes: snap.notes.map((n) => ({ ...n })) });
-        useMidiStore.getState().syncToClips();
-      },
-    );
-    undoStore.pianoRoll = undo;
-    redoStore.pianoRoll = redo;
-    return () => { undoStore.pianoRoll = null; redoStore.pianoRoll = null; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   useEffect(() => {
     const el = elRef.current;
     if (!el) return;
 
-    const h = handlersRef.current;
-
-    const sync = () => useMidiStore.getState().syncToClips();
-
-    const onBeforeNoteAction = (e: Event) => {
-      const d = (e as CustomEvent).detail;
-      useUndoStore.getState().executeAction("pianoRoll", () => ({
-        notes: d.notes,
-        clipId: useMidiStore.getState().clipId,
-      }));
-    };
-
     const onNoteAdd = (e: Event) => {
+      const clip = clipIdRef.current;
+      if (clip === null) return;
       const d = (e as CustomEvent).detail;
-      h.addNote(
+      project.addNote(
+        clip,
         {
           note: d.note,
           startTick: d.startTick,
@@ -116,25 +78,30 @@ export const PianoRollWindow = memo(function PianoRollWindow({
         },
         d.noteId,
       );
-      sync();
     };
 
     const onNoteMove = (e: Event) => {
+      const clip = clipIdRef.current;
+      if (clip === null) return;
       const d = (e as CustomEvent).detail;
-      h.moveNote(d.noteId, d.note, d.startTick);
-      sync();
+      project.updateNote(clip, d.noteId, { note: d.note, startTick: d.startTick });
     };
 
     const onNoteResize = (e: Event) => {
+      const clip = clipIdRef.current;
+      if (clip === null) return;
       const d = (e as CustomEvent).detail;
-      h.resizeNote(d.noteId, d.startTick, d.durationTicks);
-      sync();
+      project.updateNote(clip, d.noteId, {
+        startTick: d.startTick,
+        durationTicks: d.durationTicks,
+      });
     };
 
     const onNoteDelete = (e: Event) => {
+      const clip = clipIdRef.current;
+      if (clip === null) return;
       const d = (e as CustomEvent).detail;
-      h.removeNote(d.noteId);
-      sync();
+      project.removeNote(clip, d.noteId);
     };
 
     const onKeyPreview = async (e: Event) => {
@@ -162,7 +129,6 @@ export const PianoRollWindow = memo(function PianoRollWindow({
       PolySynthOutput.noteOff(note);
     };
 
-    el.addEventListener("before-note-action", onBeforeNoteAction);
     el.addEventListener("note-add", onNoteAdd);
     el.addEventListener("note-move", onNoteMove);
     el.addEventListener("note-resize", onNoteResize);
@@ -170,7 +136,6 @@ export const PianoRollWindow = memo(function PianoRollWindow({
     el.addEventListener("key-preview", onKeyPreview);
     el.addEventListener("key-release", onKeyRelease);
     return () => {
-      el.removeEventListener("before-note-action", onBeforeNoteAction);
       el.removeEventListener("note-add", onNoteAdd);
       el.removeEventListener("note-move", onNoteMove);
       el.removeEventListener("note-resize", onNoteResize);

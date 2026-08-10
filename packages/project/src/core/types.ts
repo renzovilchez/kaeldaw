@@ -85,6 +85,7 @@ export interface CoreMeta {
   nextNoteId: number;
   trackCounter: number;
   selectedTrackId: string | null;
+  historyVersion: number;
 }
 
 export interface CoreState {

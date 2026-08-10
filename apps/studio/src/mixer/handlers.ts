@@ -1,55 +1,48 @@
 import { PolySynthOutput } from "@kaeldaw/instruments/PolySynthOutput";
-import { mixerExec } from "./execWithUndo";
 import { project } from "../stores/useCoreStore";
 
 export function handleVolumeChange(id: string, v: number) {
-  mixerExec(() => project.setChannelVolume(id, v));
+  project.setChannelVolume(id, v);
 }
 
 export function handlePanChange(id: string, v: number) {
-  mixerExec(() => project.setChannelPan(id, v));
+  project.setChannelPan(id, v);
 }
 
 export function handleToggleMute(id: string) {
-  mixerExec(() => {
-    const ch = project.state.mixer.channels.find((c) => c.id === id);
-    project.setChannelMute(id, !ch?.mute);
-  });
+  const ch = project.state.mixer.channels.find((c) => c.id === id);
+  project.setChannelMute(id, !ch?.mute);
 }
 
 export function handleToggleSolo(id: string) {
-  mixerExec(() => {
-    const ch = project.state.mixer.channels.find((c) => c.id === id);
-    project.setChannelSolo(id, !ch?.solo);
-  });
+  const ch = project.state.mixer.channels.find((c) => c.id === id);
+  project.setChannelSolo(id, !ch?.solo);
 }
 
 export function handleSetMasterVolume(v: number) {
-  mixerExec(() => project.setMasterVolume(v));
+  project.setMasterVolume(v);
 }
 
 export function handleInsertDelay(channelId: string, enabled: boolean) {
-  mixerExec(() => project.setChannelInsertFx(channelId, "delay", enabled, 0.3));
+  project.setChannelInsertFx(channelId, "delay", enabled, 0.3);
   PolySynthOutput.setChannelInsertFx(channelId, "delay", enabled, 0.3);
 }
 
 export function handleInsertReverb(channelId: string, enabled: boolean) {
-  mixerExec(() => project.setChannelInsertFx(channelId, "reverb", enabled, 0.3));
+  project.setChannelInsertFx(channelId, "reverb", enabled, 0.3);
   PolySynthOutput.setChannelInsertFx(channelId, "reverb", enabled, 0.3);
 }
 
 export function handleSendLevel(channelId: string, level: number) {
-  mixerExec(() => project.setChannelSend(channelId, "reverb-bus", level));
+  project.setChannelSend(channelId, "reverb-bus", level);
   PolySynthOutput.setChannelSendLevel(channelId, level);
 }
 
 export function handleBusVolume(busId: string, volume: number) {
-  mixerExec(() => project.setBusVolume(busId, volume));
+  project.setBusVolume(busId, volume);
 }
 
 export function handleToggleBusMute(busId: string) {
-  mixerExec(() => {
-    const bus = project.state.mixer.buses.find((b) => b.id === busId);
-    project.setBusMute(busId, !bus?.mute);
-  });
+  const bus = project.state.mixer.buses.find((b) => b.id === busId);
+  project.setBusMute(busId, !bus?.mute);
 }

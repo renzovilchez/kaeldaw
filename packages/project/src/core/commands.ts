@@ -47,7 +47,7 @@ export function createProject(
     clips: [],
     mixer: { channels: [], buses: [], masterVolume: 0.8 },
     transport: { state: "stopped", position: 0, metronomeEnabled: false },
-    meta: { nextClipId: 1, nextNoteId: 1, trackCounter: 0, selectedTrackId: null },
+    meta: { nextClipId: 1, nextNoteId: 1, trackCounter: 0, selectedTrackId: null, historyVersion: 0 },
   };
 }
 

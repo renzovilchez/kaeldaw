@@ -24,6 +24,13 @@ function cloneState(state: CoreState): CoreState {
   return structuredClone(state);
 }
 
+function bumpVersion(state: CoreState): CoreState {
+  return {
+    ...state,
+    meta: { ...state.meta, historyVersion: state.meta.historyVersion + 1 },
+  };
+}
+
 export function createCoreStore(initialState: CoreState): CoreStore {
   const store = createStore<CoreState>()(() => cloneState(initialState));
   const history = new CoreHistory();
@@ -47,8 +54,9 @@ export function createCoreStore(initialState: CoreState): CoreStore {
 
     dispatch: (name, reducer) => {
       const before = store.getState();
-      const after = reducer(before);
-      if (after === before) return;
+      const reduced = reducer(before);
+      if (reduced === before) return;
+      const after = bumpVersion(reduced);
       const beforeClone = cloneState(before);
       const afterClone = cloneState(after);
       history.push({ name, before: beforeClone, after: afterClone });
@@ -58,8 +66,9 @@ export function createCoreStore(initialState: CoreState): CoreStore {
 
     run: (name, reducer) => {
       const before = store.getState();
-      const after = reducer(before);
-      if (after === before) return before;
+      const reduced = reducer(before);
+      if (reduced === before) return before;
+      const after = bumpVersion(reduced);
       history.push({ name, before: cloneState(before), after: cloneState(after) });
       store.setState(after);
       notify(after, before);
@@ -77,7 +86,7 @@ export function createCoreStore(initialState: CoreState): CoreStore {
       const entry = history.undo();
       if (!entry) return false;
       const before = store.getState();
-      store.setState(entry.before);
+      store.setState(bumpVersion(entry.before));
       notify(entry.before, before);
       return true;
     },
@@ -86,7 +95,7 @@ export function createCoreStore(initialState: CoreState): CoreStore {
       const entry = history.redo();
       if (!entry) return false;
       const before = store.getState();
-      store.setState(entry.after);
+      store.setState(bumpVersion(entry.after));
       notify(entry.after, before);
       return true;
     },
