@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { PolySynthOutput } from "@kaeldaw/instruments/PolySynthOutput";
 import { Transport } from "@kaeldaw/audio-engine/Transport";
+import { Clock } from "@kaeldaw/audio-engine/Clock";
 import { instrumentManager } from "../shared/instrumentManager";
 import { buildMidiEvents } from "../shared/buildMidiEvents";
 import { project, useCore } from "../stores/useCoreStore";
@@ -41,6 +42,8 @@ export function usePlaybackEngine(
           Transport.ppqn,
           Transport.position,
         );
+        Transport.play();
+        Clock.start();
       })();
 
       return () => {

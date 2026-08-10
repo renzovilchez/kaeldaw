@@ -29,24 +29,15 @@ export function useTransportBridge() {
   }, [timeSignature]);
 
   useEffect(() => {
-    if (state === "playing") {
-      let cancelled = false;
-      (async () => {
-        AudioContextManager.init();
-        await AudioContextManager.resume();
-        if (cancelled) return;
-        Transport.play();
-        Clock.start();
-      })();
-      return () => {
-        cancelled = true;
-      };
-    } else if (state === "paused") {
+    if (state === "paused") {
       Clock.stop();
       Transport.pause();
-    } else {
+    } else if (state === "stopped") {
       Clock.stop();
       Transport.stop();
+    } else {
+      AudioContextManager.init();
+      void AudioContextManager.resume();
     }
   }, [state]);
 }
