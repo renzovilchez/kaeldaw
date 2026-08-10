@@ -90,10 +90,13 @@ export const TimelineWindow = memo(function TimelineWindow() {
   const handlersRef = useRef({
     addClip: (clip: Parameters<typeof project.addClip>[0], id?: number) =>
       project.addClip(clip, id),
-    moveClip: project.moveClip,
-    resizeClip: project.resizeClip,
-    trimClip: project.trimClip,
-    removeClip: project.removeClip,
+    moveClip: (id: number, startTick: number, trackIndex: number, trackId?: string) =>
+      project.moveClip(id, startTick, trackIndex, trackId),
+    resizeClip: (id: number, startTick: number, durationTicks: number) =>
+      project.resizeClip(id, startTick, durationTicks),
+    trimClip: (id: number, startOffset: number, durationTicks: number) =>
+      project.trimClip(id, startOffset, durationTicks),
+    removeClip: (id: number) => project.removeClip(id),
   });
 
   const loadMidi = useCallback(() => {
