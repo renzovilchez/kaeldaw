@@ -6,7 +6,6 @@ Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
 import { TopBar } from "./TopBar";
 import { WindowManagerProvider } from "../../shared/components/WindowManager";
-import { useTransportStore } from "@kaeldaw/project/useTransportStore";
 
 let root: Root;
 let container: HTMLDivElement;
@@ -50,13 +49,6 @@ function cleanup() {
 
 beforeEach(() => {
   cleanup();
-  useTransportStore.setState({
-    bpm: 120,
-    timeSignature: { beats: 4, beatValue: 4 },
-    state: "stopped",
-    position: 0,
-    ppqn: 480,
-  });
 });
 
 describe("TopBar", () => {

@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { useProjectStore } from "@kaeldaw/project/useProjectStore";
 import { createDownloadLink, revokeDownloadLink } from "@kaeldaw/project/wav-export";
 import { renderProject } from "../renderProject";
 import type { ExportProgress } from "../renderProject";
+import { useCore } from "../../stores/useCoreStore";
 
 export function useExport() {
-  const projectName = useProjectStore((s) => s.name);
+  const projectName = useCore((s) => s.name);
   const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
 
   const handleExport = async () => {

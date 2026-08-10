@@ -1,5 +1,5 @@
 import { useEffect, type MutableRefObject } from "react";
-import type { MidiNoteData } from "@kaeldaw/project/useMidiStore";
+import type { MidiNoteData } from "@kaeldaw/project/useClipsStore";
 
 interface PianoRollWC extends HTMLElement {
   selectedNoteId: number | null;
